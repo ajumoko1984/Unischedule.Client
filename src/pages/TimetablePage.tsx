@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, MapPin, Pencil, Loader2, X, Trash2, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -48,14 +48,24 @@ export default function TimetablePage() {
   const [venueForm, setVenueForm] = useState({ newVenue: '', reason: '' });
   const [activeTimetableId, setActiveTimetableId] = useState<string | null>(null);
 
-  const { data: timetables = [], isLoading } = useQuery<Timetable[]>({
-    queryKey: ['timetables'],
-    queryFn: () => api.get('/timetable').then(r => r.data.data),
-    onSuccess: (data) => { if (data.length && !activeTimetableId) setActiveTimetableId(data[0]._id); }
-  });
+const { data, isLoading } = useQuery<Timetable[]>({
+  queryKey: ['timetables'],
+  queryFn: async (): Promise<Timetable[]> => {
+    const res = await api.get('/timetable');
+    return res.data.data;
+  },
+});
 
-  const activeTimetable = timetables.find(t => t._id === activeTimetableId) || timetables[0];
+const timetables: Timetable[] = data ?? [];
 
+useEffect(() => {
+  if (timetables.length && !activeTimetableId) {
+    setActiveTimetableId(timetables[0]._id);
+  }
+}, [timetables, activeTimetableId]);
+
+ const activeTimetable = timetables.find(t => t._id === activeTimetableId) || timetables[0];
+ 
   const createTimetable = useMutation({
     mutationFn: (data: object) => api.post('/timetable', {
       ...data, faculty: user?.faculty, level: user?.level,
