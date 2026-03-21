@@ -3,13 +3,16 @@ import { useAuth } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import TimetablePage from './pages/TimetablePage';
 import EventsPage from './pages/EventsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import UsersPage from './pages/UsersPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
+import StudyPlannerPage from './pages/StudyPlannerPage';
+import AssignmentTrackerPage from './pages/AssignmentTrackerPage';
+import CalendarPage from './pages/CalendarPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
@@ -30,16 +33,19 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
-        <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
-        <Route path="/forgot-password" element={user ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
+        <Route path="/login"          element={user ? <Navigate to="/dashboard" replace /> : <LoginPage />} />
+        <Route path="/register"       element={user ? <Navigate to="/dashboard" replace /> : <RegisterPage />} />
+        <Route path="/forgot-password"element={user ? <Navigate to="/dashboard" replace /> : <ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={user ? <Navigate to="/dashboard" replace /> : <ResetPasswordPage />} />
         <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="timetable" element={<TimetablePage />} />
-          <Route path="events" element={<EventsPage />} />
+          <Route path="dashboard"   element={<DashboardPage />} />
+          <Route path="timetable"   element={<TimetablePage />} />
+          <Route path="calendar"    element={<CalendarPage />} />
+          <Route path="events"      element={<EventsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="study-planner"  element={<StudyPlannerPage />} />
+          <Route path="assignments"    element={<AssignmentTrackerPage />} />
           <Route path="users" element={<ManageRoute><UsersPage /></ManageRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
