@@ -5,7 +5,7 @@ export interface User {
   fullName: string;
   email: string;
   role: UserRole;
-  faculty: string;
+  department: string;
   level: string;
   courseOfStudy: string;
   matricNumber?: string;
@@ -41,7 +41,7 @@ export interface TimetableSlot {
 export interface Timetable {
   _id: string;
   title: string;
-  faculty: string;
+  department: string;
   level: string;
   courseOfStudy: string;
   semester: Semester;
@@ -67,7 +67,7 @@ export interface CalendarEvent {
   endTime?: string;
   venue: string;
   description?: string;
-  faculty: string;
+  department: string;
   level: string;
   courseOfStudy: string;
   semester: string;
@@ -105,4 +105,61 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string;
+}
+
+// ── Study Planner ─────────────────────────────────────────────────────────────
+export type StudyTaskStatus = 'pending' | 'in_progress' | 'completed' | 'missed';
+
+export interface StudyTask {
+  _id: string;
+  courseCode: string;
+  courseTitle: string;
+  task: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  status: StudyTaskStatus;
+  reminderSent: boolean;
+  completedAt?: string;
+  notes?: string;
+}
+
+export interface StudyPlan {
+  _id: string;
+  owner: string;
+  level: string;
+  courseOfStudy: string;
+  tasks: StudyTask[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Assignment Tracker ────────────────────────────────────────────────────────
+export type AssignmentStatus   = 'pending' | 'in_progress' | 'completed' | 'overdue';
+export type AssignmentPriority = 'low' | 'medium' | 'high';
+
+export interface Assignment {
+  _id: string;
+  owner: string;
+  courseCode: string;
+  courseTitle: string;
+  title: string;
+  description?: string;
+  deadline: string;
+  priority: AssignmentPriority;
+  status: AssignmentStatus;
+  completedAt?: string;
+  reminderSent: boolean;
+  level: string;
+  courseOfStudy: string;
+  createdAt: string;
+}
+
+// ── Weekly Summary ────────────────────────────────────────────────────────────
+export interface WeeklySummary {
+  weekStart: string;
+  weekEnd: string;
+  study: { total: number; completed: number; missed: number };
+  assignments: { total: number; completed: number; overdue: number };
+  courseProgress: { courseCode: string; courseTitle: string; percent: number; completed: number; total: number }[];
+  message: string;
 }
