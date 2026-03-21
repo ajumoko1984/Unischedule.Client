@@ -68,7 +68,7 @@ useEffect(() => {
  
   const createTimetable = useMutation({
     mutationFn: (data: object) => api.post('/timetable', {
-      ...data, faculty: user?.faculty, level: user?.level,
+      ...data,faculty: user?.faculty, level: user?.level,
       courseOfStudy: user?.courseOfStudy, slots: [],
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['timetables'] }); setShowAddTimetable(false); toast.success('Timetable created!'); },
