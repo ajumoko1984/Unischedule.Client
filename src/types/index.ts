@@ -5,7 +5,7 @@ export interface User {
   fullName: string;
   email: string;
   role: UserRole;
-  department: string;
+  faculty: string;
   level: string;
   courseOfStudy: string;
   matricNumber?: string;
