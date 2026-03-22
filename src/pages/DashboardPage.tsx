@@ -179,7 +179,7 @@ export default function DashboardPage() {
 
       {/* ── Calendar quick-access strip ──────────────────────────────────── */}
       <Link to="/calendar" className="card p-4 flex items-center gap-4 hover:shadow-elevated transition-all group cursor-pointer no-underline block">
-        <div className="w-11 h-11 bg-primary-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary-700 transition-colors">
+        <div className="w-11 h-11 bg-primary-950 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-primary-900 transition-colors">
           <CalendarRange size={20} className="text-white" />
         </div>
         <div className="flex-1 min-w-0">
@@ -200,7 +200,7 @@ export default function DashboardPage() {
             return (
               <div key={d} className={`flex flex-col items-center px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors ${
                 isCurrentDay
-                  ? 'bg-primary-600 text-white'
+                  ? 'bg-primary-950 text-white'
                   : hasEvent
                   ? 'bg-primary-50 text-primary-600'
                   : 'bg-slate-50 text-slate-400'
