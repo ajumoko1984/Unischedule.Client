@@ -149,7 +149,7 @@ export default function AssignmentTrackerPage() {
         {STATUS_TABS.map(tab => (
           <button key={tab.value} onClick={() => setFilter(tab.value)}
             className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
-              filter === tab.value ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+              filter === tab.value ? 'bg-primary-950 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
             }`}>
             {tab.label}
           </button>

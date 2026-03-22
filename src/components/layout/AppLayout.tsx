@@ -74,7 +74,7 @@ export default function AppLayout() {
       {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-100">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-primary-600 rounded-xl flex items-center justify-center">
+          <div className="w-9 h-9 bg-primary-950 rounded-xl flex items-center justify-center">
             <GraduationCap size={18} className="text-white" />
           </div>
           <div>
@@ -119,7 +119,7 @@ export default function AppLayout() {
       {/* User profile */}
       <div className="px-3 py-3 border-t border-slate-100">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50">
-          <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+          <div className="w-8 h-8 bg-primary-950 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
             {user?.fullName.split(' ').map(n => n[0]).slice(0, 2).join('')}
           </div>
           <div className="flex-1 min-w-0">
@@ -164,12 +164,12 @@ export default function AppLayout() {
             <Menu size={20} />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-primary-600 rounded-lg flex items-center justify-center">
+            <div className="w-7 h-7 bg-primary-950 rounded-lg flex items-center justify-center">
               <GraduationCap size={14} className="text-white" />
             </div>
             <span className="font-semibold text-slate-800">UniSchedule</span>
           </div>
-          <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white text-xs font-semibold">
+          <div className="w-8 h-8 bg-primary-950 rounded-full flex items-center justify-center text-white text-xs font-semibold">
             {user?.fullName.split(' ').map(n => n[0]).slice(0, 2).join('')}
           </div>
         </header>

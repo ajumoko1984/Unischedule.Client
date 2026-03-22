@@ -85,7 +85,7 @@ export default function EventsPage() {
         {(['all', ...CATEGORIES] as const).map(cat => (
           <button key={cat} onClick={() => setFilter(cat)}
             className={`px-3 py-1.5 text-sm rounded-lg font-medium capitalize transition-colors ${
-              filter === cat ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+              filter === cat ? 'bg-primary-950 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
             }`}>
             {cat === 'all' ? 'All events' : cat}
           </button>

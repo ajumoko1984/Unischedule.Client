@@ -252,7 +252,7 @@ export default function CalendarPage() {
                   <div className="flex items-center justify-end mb-1">
                     <span className={`w-6 h-6 flex items-center justify-center text-xs font-semibold rounded-full transition-colors ${
                       isTodayDay
-                        ? 'bg-primary-600 text-white'
+                        ? 'bg-primary-950 text-white'
                         : isSelected
                         ? 'bg-primary-100 text-primary-700'
                         : 'text-slate-600'
@@ -294,7 +294,7 @@ export default function CalendarPage() {
           <div className="card p-4">
             <div className="flex items-center gap-3 mb-4">
               <div className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
-                isToday(selectedDay) ? 'bg-primary-600' : 'bg-slate-100'
+                isToday(selectedDay) ? 'bg-primary-950' : 'bg-slate-100'
               }`}>
                 <p className={`text-[10px] font-bold uppercase ${isToday(selectedDay) ? 'text-white/80' : 'text-slate-500'}`}>
                   {format(selectedDay, 'MMM')}
