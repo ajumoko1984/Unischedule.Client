@@ -218,7 +218,7 @@ export default function StudyPlannerPage() {
         {(['all', 'pending', 'in_progress', 'completed', 'missed'] as const).map(f => (
           <button key={f} onClick={() => setFilter(f)}
             className={`px-3 py-1.5 text-sm rounded-lg font-medium capitalize transition-colors ${
-              filter === f ? 'bg-primary-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
+              filter === f ? 'bg-primary-950 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-50'
             }`}>
             {f === 'all' ? 'All sessions' : f.replace('_', ' ')}
           </button>

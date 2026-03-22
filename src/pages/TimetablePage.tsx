@@ -211,7 +211,7 @@ useEffect(() => {
                 onClick={() => setActiveTimetableId(t._id)}
                 className={`px-3 py-1.5 text-sm rounded-l-lg border-y border-l transition-colors ${
                   activeTimetable?._id === t._id
-                    ? 'bg-primary-600 text-white border-primary-600'
+                    ? 'bg-primary-950 text-white border-primary-600'
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                 }`}
               >

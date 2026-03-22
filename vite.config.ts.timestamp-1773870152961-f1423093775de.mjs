@@ -8,6 +8,7 @@ var vite_config_default = defineConfig({
     proxy: {
       "/api": {
         target: "https://unischedule-server.onrender.com",
+        // target: "http://localhost:5000",
         changeOrigin: true
       }
     }
