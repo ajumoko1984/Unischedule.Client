@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'level_adviser' | 'class_rep' | 'student';
+export type UserRole = 'super_admin' | 'level_adviser' | 'class_rep' | 'student' | 'exam_officer';
 
 export interface User {
   _id: string;
@@ -6,11 +6,42 @@ export interface User {
   email: string;
   role: UserRole;
   faculty: string;
-  level: string;
-  courseOfStudy: string;
+  level?: string;
+  courseOfStudy?: string;
   matricNumber?: string;
   isActive?: boolean;
   createdAt?: string;
+}
+
+export type ExamType = 'cbt' | 'written' | 'practical' | 'oral';
+export type ExamStatus = 'draft' | 'published' | 'scheduled' | 'ongoing' | 'completed';
+
+export interface Exam {
+  _id: string;
+  title: string;
+  courseCode: string;
+  courseTitle: string;
+  examType: ExamType;
+  duration: number; // in minutes
+  totalMarks: number;
+  date?: string; // ISO date
+  scheduleDate?: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  location?: string; // Auto-set to "CBT CENTRE" for CBT exams
+  venue?: string;
+  invigilators: string[]; // Lecturers invigilating
+  instructions?: string;
+  faculty: string;
+  level: string;
+  courseOfStudy: string;
+  semester: Semester;
+  academicYear: string;
+  students: string[]; // Student IDs registered for exam
+  status: ExamStatus;
+  createdBy: { _id: string; fullName: string };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type DayOfWeek = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday';

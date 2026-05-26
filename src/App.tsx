@@ -10,9 +10,15 @@ import TimetablePage from './pages/TimetablePage';
 import EventsPage from './pages/EventsPage';
 import NotificationsPage from './pages/NotificationsPage';
 import UsersPage from './pages/UsersPage';
+import EditProfilePage from './pages/EditProfilePage';
 import StudyPlannerPage from './pages/StudyPlannerPage';
 import AssignmentTrackerPage from './pages/AssignmentTrackerPage';
 import CalendarPage from './pages/CalendarPage';
+import ExamManagementPage from './pages/ExamManagementPage';
+import ExamsListPage from './pages/ExamsListPage';
+import AdminCreateUserPage from './pages/AdminCreateUserPage';
+import CourseFormPage from './pages/CourseFormPage';
+import StudentCourseFormPage from './pages/StudentCourseFormPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
@@ -24,6 +30,22 @@ const ManageRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'super_admin' && user.role !== 'level_adviser') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// Accessible by exam_officer only
+const ExamOfficerRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'exam_officer' && user.role !== 'super_admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// Accessible by super_admin only
+const AdminRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'super_admin') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -44,9 +66,16 @@ export default function App() {
           <Route path="calendar"    element={<CalendarPage />} />
           <Route path="events"      element={<EventsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="edit-profile" element={<EditProfilePage />} />
           <Route path="study-planner"  element={<StudyPlannerPage />} />
           <Route path="assignments"    element={<AssignmentTrackerPage />} />
+          <Route path="exam-timetable" element={<ExamsListPage />} />
+          <Route path="exam-management" element={<ExamOfficerRoute><ExamManagementPage /></ExamOfficerRoute>} />
+          <Route path="exams" element={<ExamOfficerRoute><ExamsListPage /></ExamOfficerRoute>} />
+          <Route path="course-forms" element={<ManageRoute><CourseFormPage /></ManageRoute>} />
+          <Route path="my-course-form" element={<ProtectedRoute><StudentCourseFormPage /></ProtectedRoute>} />
           <Route path="users" element={<ManageRoute><UsersPage /></ManageRoute>} />
+          <Route path="admin/create-user" element={<AdminRoute><AdminCreateUserPage /></AdminRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

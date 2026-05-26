@@ -1,9 +1,13 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://unischedule-server.onrender.com/api',
-  // baseURL: 'http://localhost:5000/api',
-  headers: { 'Content-Type': 'application/json' },
+  // baseURL: 'https://unischedule-server.onrender.com/api',
+  baseURL: 'http://localhost:5000/api',
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    Pragma: 'no-cache',
+  },
 });
 
 // Attach JWT token to every request
