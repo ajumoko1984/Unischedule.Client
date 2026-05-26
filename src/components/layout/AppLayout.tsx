@@ -3,21 +3,38 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, CalendarDays, ClipboardList, Bell,
   Users, LogOut, Menu, ChevronRight, GraduationCap,
-  BookOpen, CheckSquare, CalendarRange,
+  BookOpen, CheckSquare, CalendarRange, Settings, UserPlus, FileText,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const coreNav = [
   { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/timetable',     icon: CalendarDays,    label: 'Timetable' },
+  { to: '/timetable',     icon: CalendarDays,    label: 'Class Timetable' },
   { to: '/calendar',      icon: CalendarRange,   label: 'Calendar' },
-  { to: '/events',        icon: ClipboardList,   label: 'Tests & Exams' },
+  { to: '/events',        icon: ClipboardList,   label: 'Tests & Events' },
   { to: '/notifications', icon: Bell,            label: 'Notifications' },
 ];
 
 const studentNav = [
   { to: '/study-planner', icon: BookOpen,    label: 'Study Planner' },
   { to: '/assignments',   icon: CheckSquare, label: 'Assignments' },
+  { to: '/exam-timetable', icon: CalendarDays, label: 'Exam Timetable' },
+  { to: '/my-course-form', icon: FileText, label: 'My Course Form' },
+];
+
+const examOfficerNav = [
+  { to: '/exams', icon: CalendarDays, label: 'Exams' },
+  { to: '/exam-management', icon: ClipboardList, label: 'Manage Exams' },
+];
+
+const courseFormNav = [
+  { to: '/course-forms', icon: FileText, label: 'Manage Course Forms' },
+];
+
+const examOfficerCoreNav = [
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/calendar', icon: CalendarRange, label: 'Calendar' },
+  { to: '/notifications', icon: Bell, label: 'Notifications' },
 ];
 
 const roleLabel: Record<string, string> = {
@@ -25,6 +42,7 @@ const roleLabel: Record<string, string> = {
   level_adviser: 'Level Adviser',
   class_rep:     'Class Rep',
   student:       'Student',
+  exam_officer:  'Exam Officer',
 };
 
 const roleBadgeClass: Record<string, string> = {
@@ -32,6 +50,7 @@ const roleBadgeClass: Record<string, string> = {
   level_adviser: 'bg-emerald-100 text-emerald-700',
   class_rep:     'bg-primary-100 text-primary-700',
   student:       'bg-slate-100 text-slate-600',
+  exam_officer:  'bg-orange-100 text-orange-700',
 };
 
 const NavItem = ({
@@ -67,6 +86,7 @@ export default function AppLayout() {
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const isStudentOrRep = user?.role === 'student' || user?.role === 'class_rep';
+  const isExamOfficer = user?.role === 'exam_officer';
   const canManageUsers = user?.role === 'super_admin' || user?.role === 'level_adviser';
 
   const SidebarContent = () => (
@@ -91,7 +111,9 @@ export default function AppLayout() {
         <div>
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Main</p>
           <div className="space-y-0.5">
-            {coreNav.map(item => <NavItem key={item.to} {...item} onClick={close} />)}
+            {(isExamOfficer ? examOfficerCoreNav : coreNav).map(item => (
+              <NavItem key={item.to} {...item} onClick={close} />
+            ))}
           </div>
         </div>
 
@@ -104,7 +126,27 @@ export default function AppLayout() {
             </div>
           </div>
         )}
+{/* Exam Management — exam officers only  */}
+        {isExamOfficer && (
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Exam Management</p>
+            <div className="space-y-0.5">
+              {examOfficerNav.map(item => <NavItem key={item.to} {...item} onClick={close} />)}
+            </div>
+          </div>
+        )}
 
+        {/* Course Forms — level adviser only */}
+        {user?.role === 'level_adviser' && (
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Course Management</p>
+            <div className="space-y-0.5">
+              {courseFormNav.map(item => <NavItem key={item.to} {...item} onClick={close} />)}
+            </div>
+          </div>
+        )}
+
+        {/* 
         {/* Management — super admin & level adviser only */}
         {canManageUsers && (
           <div>
@@ -114,10 +156,40 @@ export default function AppLayout() {
             </div>
           </div>
         )}
+
+        {/* Admin — super admin only */}
+        {user?.role === 'super_admin' && (
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Admin</p>
+            <div className="space-y-0.5">
+              <NavItem to="/admin/create-user" icon={UserPlus} label="Create User" onClick={close} />
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* User profile */}
-      <div className="px-3 py-3 border-t border-slate-100">
+      <div className="px-3 py-3 border-t border-slate-100 space-y-2">
+        <NavLink
+          to="/edit-profile"
+          onClick={close}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+              isActive
+                ? 'bg-primary-50 text-primary-700'
+                : 'text-slate-600 hover:bg-slate-50'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <Settings size={16} className={isActive ? 'text-primary-600' : 'text-slate-400'} />
+              <span className="text-sm font-medium">Edit Profile</span>
+              {isActive && <ChevronRight size={14} className="ml-auto text-primary-400" />}
+            </>
+          )}
+        </NavLink>
+
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50">
           <div className="w-8 h-8 bg-primary-950 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
             {user?.fullName.split(' ').map(n => n[0]).slice(0, 2).join('')}
@@ -131,6 +203,7 @@ export default function AppLayout() {
           <button
             onClick={handleLogout}
             className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+            title="Logout"
           >
             <LogOut size={14} />
           </button>

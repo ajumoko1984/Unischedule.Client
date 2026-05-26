@@ -15,9 +15,10 @@ const roleStyle: Record<UserRole, { bg: string; text: string; label: string }> =
   level_adviser: { bg: 'bg-emerald-50', text: 'text-emerald-700', label: 'Level Adviser' },
   class_rep:     { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Class Rep' },
   student:       { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Student' },
+  exam_officer:  { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Exam Officer' },
 };
 
-const ROLES: UserRole[] = ['super_admin', 'level_adviser', 'class_rep', 'student'];
+const ROLES: UserRole[] = ['super_admin', 'level_adviser', 'class_rep', 'student', 'exam_officer'];
 const LEVELS = ['100', '200', '300', '400', '500'];
 const DEPTS = [
   'Educational Technology', 'Science Education', 'Arts Education',
@@ -43,10 +44,26 @@ export default function UsersPage() {
   const [assignCourse, setAssignCourse] = useState(authUser?.courseOfStudy || '');
   const [selectedStudentId, setSelectedStudentId] = useState('');
 
-  // Fetch all users
+  // Fetch all users — level advisers get scoped students, super admins get all
   const { data: users = [], isLoading } = useQuery<User[]>({
-    queryKey: ['users'],
-    queryFn: () => api.get('/users').then(r => r.data.data),
+    queryKey: ['users', isAdmin],
+    queryFn: () => {
+      // Level advisers fetch from /students-for-level endpoint (scoped to their level)
+      if (!isAdmin) {
+        return api.get('/users/students-for-level').then(r => {
+          const result = r.data.data;
+          // Handle response format: { students: [...], currentRep: ... }
+          if (result?.students && Array.isArray(result.students)) {
+            const combined = [...result.students];
+            if (result.currentRep) combined.push(result.currentRep);
+            return combined;
+          }
+          return Array.isArray(result) ? result : [];
+        });
+      }
+      // Super admins fetch all users
+      return api.get('/users').then(r => r.data.data);
+    },
   });
 
   // Fetch students for the assign-rep dropdown
@@ -409,9 +426,9 @@ export default function UsersPage() {
                 <div>
                   <label className="label">Role</label>
                   <select className="input" value={form.role} onChange={set('role')}>
-                    {/* Super admin can only create level_adviser from here — not super_admin */}
                     <option value="student">Student</option>
                     <option value="level_adviser">Level Adviser</option>
+                    <option value="exam_officer">Exam Officer</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
                 </div>
@@ -453,6 +470,12 @@ export default function UsersPage() {
                 <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-xs text-emerald-700">
                   ✅ This Level Adviser will have full management access for {form.level || '?'} Level — {form.courseOfStudy || '?'}.
                   They can assign and revoke the class rep for their level.
+                </div>
+              )}
+              {form.role === 'exam_officer' && (
+                <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 text-xs text-orange-700">
+                  ✅ This Exam Officer can create, publish, and manage exams for {form.level || '?'} Level — {form.courseOfStudy || '?'}.
+                  Students will see published exams based on their approved course forms.
                 </div>
               )}
               <div className="flex gap-2 pt-1">

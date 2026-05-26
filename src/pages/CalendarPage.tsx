@@ -4,12 +4,15 @@ import {
   ChevronLeft, ChevronRight, CalendarDays,
   MapPin, Clock, BookOpen, CheckSquare,
 } from 'lucide-react';
+import { Exam } from '../types';
+import { courseFormService } from '../utils/courseFormService';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   addMonths, subMonths, isSameMonth, isSameDay, isToday,
   parseISO, addDays, getDay,
 } from 'date-fns';
 import api from '../utils/api';
+import { examService } from '../utils/examService';
 import { useAuth } from '../context/AuthContext';
 import { Timetable, CalendarEvent, StudyPlan, Assignment } from '../types';
 
@@ -53,6 +56,46 @@ export default function CalendarPage() {
   const { data: timetables = [] } = useQuery<Timetable[]>({
     queryKey: ['timetables'],
     queryFn: () => api.get('/timetable').then(r => r.data.data),
+  });
+
+  const { data: exams = [] } = useQuery<Exam[]>({
+    queryKey: ['calendar-exams', user?.role, user?.faculty, user?.courseOfStudy, user?.level],
+    queryFn: async () => {
+      const res = await examService.getMyExams();
+      const examsData: Exam[] = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.data || []);
+
+      if (isStudentOrRep) {
+        const courseFormRes = await courseFormService.getMyCourseforms({
+          faculty: user?.faculty,
+          courseOfStudy: user?.courseOfStudy,
+          level: user?.level,
+          status: 'approved',
+        });
+
+        const forms = Array.isArray(courseFormRes.data)
+          ? courseFormRes.data
+          : (courseFormRes.data?.forms || courseFormRes.data?.data || []);
+
+        const approvedForm = Array.isArray(forms) ? forms[0] : null;
+        if (!approvedForm || !Array.isArray(approvedForm.courses)) {
+          return [];
+        }
+
+        const courseCodes = approvedForm.courses.map((course: any) =>
+          (typeof course === 'string' ? course : course.courseCode).trim().toUpperCase()
+        );
+
+        return examsData.filter(
+          e => e.scheduleDate && courseCodes.includes(e.courseCode.trim().toUpperCase()) && e.status !== 'draft'
+        );
+      }
+
+      return examsData.filter(e => e.scheduleDate && e.status !== 'draft');
+    },
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5,
   });
 
   const { data: events = [] } = useQuery<CalendarEvent[]>({
@@ -107,7 +150,21 @@ export default function CalendarPage() {
       }
     }
 
-    // 2. Tests / exams / events
+    // 2. Exams from the exam management system
+    for (const exam of exams) {
+      const examDate = parseISO(exam.scheduleDate!);
+      items.push({
+        id: `exam-${exam._id}`,
+        title: exam.courseTitle,
+        subtitle: exam.courseCode,
+        time: `${exam.startTime} – ${exam.endTime}`,
+        type: 'exam',
+        date: examDate,
+        venue: exam.venue,
+      });
+    }
+
+    // 3. Tests / exams / events
     for (const ev of events) {
       const d = parseISO(ev.date);
       items.push({

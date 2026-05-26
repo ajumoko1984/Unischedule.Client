@@ -12,6 +12,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isClassRep: boolean;
   isLevelAdviser: boolean;
+  isExamOfficer: boolean;
   canManage: boolean;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
@@ -22,9 +23,10 @@ interface RegisterData {
   email: string;
   password: string;
   role?: string;
-  faculty: string;
-  level: string;
-  courseOfStudy: string;
+  facultyId?: string;
+  faculty?: string;
+  level?: string;
+  courseOfStudy?: string;
   matricNumber?: string;
 }
 
@@ -82,6 +84,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('user');
   };
 
+  const isAdmin = user?.role === 'super_admin';
+  const isLevelAdviser = user?.role === 'level_adviser';
+  const isClassRep = user?.role === 'class_rep';
+  const isExamOfficer = user?.role === 'exam_officer';
+  const canManage = isAdmin || isLevelAdviser || isClassRep;
+
   const forgotPassword = async (email: string) => {
   setIsLoading(true);
   try {
@@ -100,14 +108,8 @@ const resetPassword = async (token: string, newPassword: string) => {
   }
 };
 
-  const isAdmin = user?.role === 'super_admin';
-  const isClassRep = user?.role === 'class_rep';
-  const isLevelAdviser = user?.role === 'level_adviser';
-  const canManage = isAdmin || isClassRep || isLevelAdviser;
-
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, isAdmin, isClassRep, isLevelAdviser, canManage,   forgotPassword,
-  resetPassword }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout, isAdmin, isClassRep, isLevelAdviser, isExamOfficer, canManage, forgotPassword, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

@@ -98,7 +98,7 @@ MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/unischedule
 JWT_SECRET=your_random_secret_here
 MAIL_USER=your_gmail@gmail.com
 MAIL_PASS=your_gmail_app_password
-CLIENT_URL=http://localhost:5173
+CLIENT_URL=http://localhost:5178
 ```
 
 **Getting a Gmail App Password:**
@@ -123,7 +123,7 @@ npm install
 npm run dev
 ```
 
-The app runs at **http://localhost:5173**
+The app runs at **http://localhost:5178**
 
 ---
 

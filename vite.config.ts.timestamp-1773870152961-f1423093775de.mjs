@@ -4,7 +4,7 @@ import react from "file:///C:/Users/bamid/Unischedule/client/node_modules/@vitej
 var vite_config_default = defineConfig({
   plugins: [react()],
   server: {
-    port: 5173,
+    port: 5178,
     proxy: {
       "/api": {
         target: "https://unischedule-server.onrender.com",
