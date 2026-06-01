@@ -19,12 +19,14 @@ const studentNav = [
   { to: '/study-planner', icon: BookOpen,    label: 'Study Planner' },
   { to: '/assignments',   icon: CheckSquare, label: 'Assignments' },
   { to: '/exam-timetable', icon: CalendarDays, label: 'Exam Timetable' },
+  { to: '/tests', icon: ClipboardList, label: 'CBT Test' },
   { to: '/my-course-form', icon: FileText, label: 'My Course Form' },
 ];
 
 const examOfficerNav = [
   { to: '/exams', icon: CalendarDays, label: 'Exams' },
   { to: '/exam-management', icon: ClipboardList, label: 'Manage Exams' },
+  { to: '/tests', icon: ClipboardList, label: 'CBT Test' },
 ];
 
 const courseFormNav = [
@@ -136,8 +138,8 @@ export default function AppLayout() {
           </div>
         )}
 
-        {/* Course Forms — level adviser only */}
-        {user?.role === 'level_adviser' && (
+        {/* Course Forms — level adviser and class rep */}
+        {(user?.role === 'level_adviser' ) && (
           <div>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Course Management</p>
             <div className="space-y-0.5">

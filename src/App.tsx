@@ -16,20 +16,22 @@ import AssignmentTrackerPage from './pages/AssignmentTrackerPage';
 import CalendarPage from './pages/CalendarPage';
 import ExamManagementPage from './pages/ExamManagementPage';
 import ExamsListPage from './pages/ExamsListPage';
+import CBTTestPage from './pages/CBTTestPage';
 import AdminCreateUserPage from './pages/AdminCreateUserPage';
 import CourseFormPage from './pages/CourseFormPage';
 import StudentCourseFormPage from './pages/StudentCourseFormPage';
+import StudentCourseFormEditPage from './pages/StudentCourseFormEditPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
-// Accessible by super_admin AND level_adviser
+// Accessible by super_admin, level_adviser, and class_rep
 const ManageRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'super_admin' && user.role !== 'level_adviser') return <Navigate to="/dashboard" replace />;
+  if (user.role !== 'super_admin' && user.role !== 'level_adviser' ) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -38,6 +40,14 @@ const ExamOfficerRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'exam_officer' && user.role !== 'super_admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// Accessible by exam_officer, super_admin, and class_rep (with different permissions)
+const TestManagementRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'exam_officer' && user.role !== 'super_admin' && user.role !== 'class_rep' && user.role !== 'student') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -72,7 +82,9 @@ export default function App() {
           <Route path="exam-timetable" element={<ExamsListPage />} />
           <Route path="exam-management" element={<ExamOfficerRoute><ExamManagementPage /></ExamOfficerRoute>} />
           <Route path="exams" element={<ExamOfficerRoute><ExamsListPage /></ExamOfficerRoute>} />
+          <Route path="tests" element={<TestManagementRoute><CBTTestPage /></TestManagementRoute>} />
           <Route path="course-forms" element={<ManageRoute><CourseFormPage /></ManageRoute>} />
+          <Route path="course-forms/student/:studentId" element={<ManageRoute><StudentCourseFormEditPage /></ManageRoute>} />
           <Route path="my-course-form" element={<ProtectedRoute><StudentCourseFormPage /></ProtectedRoute>} />
           <Route path="users" element={<ManageRoute><UsersPage /></ManageRoute>} />
           <Route path="admin/create-user" element={<AdminRoute><AdminCreateUserPage /></AdminRoute>} />

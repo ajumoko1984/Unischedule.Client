@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, Search, Loader2, X, UserCheck, UserX,
@@ -292,6 +293,14 @@ export default function UsersPage() {
                           >
                             <Trash2 size={14} />
                           </button>
+                        )}
+                        {(u.role === 'student' || u.role === 'class_rep') && (authUser?.role === 'level_adviser') && (
+                          <Link
+                            to={`/course-forms/student/${u._id}`}
+                            className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                          >
+                            Edit Course Form
+                          </Link>
                         )}
                       </div>
                     </td>

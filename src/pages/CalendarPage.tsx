@@ -58,43 +58,53 @@ export default function CalendarPage() {
     queryFn: () => api.get('/timetable').then(r => r.data.data),
   });
 
+  // 1. Personal course form by studentId — same query key as ExamsListPage (shared cache)
+  const { data: studentFormData, isLoading: studentFormLoading } = useQuery({
+    queryKey: ['student-course-form', user?._id],
+    queryFn: async () => {
+      const res = await courseFormService.getAllCourseForms({ studentId: user!._id });
+      const forms = Array.isArray(res.data)
+        ? res.data
+        : res.data?.forms || res.data?.data || [];
+      return forms.length > 0 ? forms[0] : null;
+    },
+    enabled: isStudentOrRep && !!user,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // 2. Dept form — only fetched when personal form confirmed empty
+  const { data: deptFormData } = useQuery({
+    queryKey: ['dept-course-form', user?.faculty, user?.courseOfStudy, user?.level],
+    queryFn: async () => {
+      const res = await courseFormService.getAllCourseForms({
+        faculty: user!.faculty,
+        courseOfStudy: user!.courseOfStudy,
+        level: user!.level,
+        status: 'approved',
+      });
+      const forms = Array.isArray(res.data)
+        ? res.data
+        : res.data?.forms || res.data?.data || [];
+      return forms.length > 0 ? forms[0] : null;
+    },
+    enabled: isStudentOrRep && !studentFormLoading && !studentFormData,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const activeForm = studentFormData || deptFormData || null;
+
+  // my-exams is now filtered correctly by the backend (exam.controller fix)
+  // same query key as ExamsListPage so cache is shared across pages
   const { data: exams = [] } = useQuery<Exam[]>({
-    queryKey: ['calendar-exams', user?.role, user?.faculty, user?.courseOfStudy, user?.level],
+    queryKey: ['my-exams', user?.role, user?._id, activeForm?._id],
     queryFn: async () => {
       const res = await examService.getMyExams();
-      const examsData: Exam[] = Array.isArray(res.data)
+      const raw: Exam[] = Array.isArray(res.data)
         ? res.data
-        : (res.data?.data || []);
-
-      if (isStudentOrRep) {
-        const courseFormRes = await courseFormService.getMyCourseforms({
-          faculty: user?.faculty,
-          courseOfStudy: user?.courseOfStudy,
-          level: user?.level,
-          status: 'approved',
-        });
-
-        const forms = Array.isArray(courseFormRes.data)
-          ? courseFormRes.data
-          : (courseFormRes.data?.forms || courseFormRes.data?.data || []);
-
-        const approvedForm = Array.isArray(forms) ? forms[0] : null;
-        if (!approvedForm || !Array.isArray(approvedForm.courses)) {
-          return [];
-        }
-
-        const courseCodes = approvedForm.courses.map((course: any) =>
-          (typeof course === 'string' ? course : course.courseCode).trim().toUpperCase()
-        );
-
-        return examsData.filter(
-          e => e.scheduleDate && courseCodes.includes(e.courseCode.trim().toUpperCase()) && e.status !== 'draft'
-        );
-      }
-
-      return examsData.filter(e => e.scheduleDate && e.status !== 'draft');
+        : res.data?.exams || res.data?.data || [];
+      return raw.filter(e => e.scheduleDate && e.status !== 'draft');
     },
-    enabled: !!user,
+    enabled: !!user && (!isStudentOrRep || !!activeForm),
     staleTime: 1000 * 60 * 5,
   });
 

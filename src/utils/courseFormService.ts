@@ -7,6 +7,8 @@ export interface Course {
 
 export interface CourseFormData {
   _id?: string;
+  studentId?: string;
+  student?: { _id: string; fullName: string; email?: string };
   faculty: string;
   courseOfStudy: string;
   level: string;
@@ -28,6 +30,9 @@ export const courseFormService = {
 
   getCourseFormById: async (id: string) =>
     api.get(`/course-forms/${id}`),
+
+  getCourseFormsByStudent: async (studentId: string) =>
+    api.get('/course-forms', { params: { studentId } }),
 
   // Level Adviser & Class Rep endpoints - manage forms
   createCourseForm: async (data: Partial<CourseFormData>) =>

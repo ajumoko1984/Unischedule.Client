@@ -19,28 +19,43 @@ export default function StudentCourseFormPage() {
   const loadApprovedCourseforms = async () => {
     try {
       setIsLoading(true);
-      const res = await courseFormService.getMyCourseforms({
+
+      const parseResponse = (responseData: any): CourseFormData[] => {
+        if (Array.isArray(responseData)) return responseData;
+        if (Array.isArray(responseData?.forms)) return responseData.forms;
+        if (Array.isArray(responseData?.courses)) return responseData.courses;
+        if (Array.isArray(responseData?.data)) return responseData.data;
+        return [];
+      };
+
+      const defaultFormsRes = await courseFormService.getMyCourseforms({
         faculty: user?.faculty,
         courseOfStudy: user?.courseOfStudy,
         level: user?.level,
       });
-      // Handle different response formats
-      const data = res.data;
-      let forms: CourseFormData[] = [];
-      
-      if (Array.isArray(data)) {
-        forms = data;
-      } else if (Array.isArray(data?.forms)) {
-        forms = data.forms;
-      } else if (Array.isArray(data?.courses)) {
-        forms = data.courses;
-      } else if (Array.isArray(data?.data)) {
-        forms = data.data;
+      const defaultForms = parseResponse(defaultFormsRes.data);
+
+      let combinedForms = defaultForms;
+
+      if (user?.role === 'student' && user._id) {
+        const studentFormsRes = await courseFormService.getCourseFormsByStudent(user._id);
+        const studentForms = parseResponse(studentFormsRes.data);
+
+        combinedForms = [
+          ...studentForms,
+          ...defaultForms.filter((deptForm) =>
+            !studentForms.some(
+              (studentForm) =>
+                studentForm.academicYear === deptForm.academicYear &&
+                studentForm.semester === deptForm.semester,
+            ),
+          ),
+        ];
       }
-      
-      setCourseForms(forms.filter(form => form.status === 'approved'));
+
+      setCourseForms(combinedForms.filter((form) => form.status === 'approved'));
     } catch (err: any) {
-      toast.success(err.response?.data?.message || 'No course forms found');
+      toast.error(err.response?.data?.message || 'No course forms found');
       setCourseForms([]);
     } finally {
       setIsLoading(false);

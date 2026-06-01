@@ -15,6 +15,8 @@ export interface User {
 
 export type ExamType = 'cbt' | 'written' | 'practical' | 'oral';
 export type ExamStatus = 'draft' | 'published' | 'scheduled' | 'ongoing' | 'completed';
+export type TestType = 'cbt' | 'written' | 'practical' | 'oral';
+export type TestStatus = 'draft' | 'published' | 'scheduled' | 'ongoing' | 'completed';
 
 export interface Exam {
   _id: string;
@@ -39,6 +41,30 @@ export interface Exam {
   academicYear: string;
   students: string[]; // Student IDs registered for exam
   status: ExamStatus;
+  createdBy: { _id: string; fullName: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Test {
+  _id: string;
+  courseCode: string;
+  courseTitle: string;
+  testType: TestType; // 'cbt' | 'written'
+  scheduleDate?: string;
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  venue?: string;
+  location?: string;
+  invigilators: string[]; // Invigilators/proctors
+  instructions?: string;
+  faculty: string;
+  level: string;
+  courseOfStudy: string;
+  semester: Semester;
+  academicYear: string;
+  students: string[]; // Student IDs registered for test
+  status: TestStatus;
   createdBy: { _id: string; fullName: string };
   createdAt?: string;
   updatedAt?: string;

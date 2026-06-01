@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, CheckSquare, Square, Loader2, X,
   Trash2, Clock, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
+import { useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { format, parseISO, isPast, isToday, isTomorrow, differenceInDays } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -81,8 +82,24 @@ export default function AssignmentTrackerPage() {
     onError: (e: any) => toast.error(e.response?.data?.message || 'Failed'),
   });
 
+  const { suggestions, courseCodeMap } = useCourseCodeSuggestions();
+
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
+
+  const updateCourseCode = (value: string) => {
+    const code = value.toUpperCase();
+    setForm(f => ({ ...f, courseCode: code }));
+    const matchedTitle = courseCodeMap.get(code.trim());
+    if (matchedTitle) {
+      setForm(f => ({ ...f, courseCode: code, courseTitle: matchedTitle }));
+    }
+  };
+
+  const courseOptions = useMemo(
+    () => suggestions.map((item) => item.courseCode),
+    [suggestions],
+  );
 
   const filtered = filter === 'all' ? assignments : assignments.filter(a => a.status === filter);
   const sorted = [...filtered].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
@@ -247,7 +264,19 @@ export default function AssignmentTrackerPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Course code</label>
-                  <input className="input uppercase" placeholder="EDT 411" value={form.courseCode} onChange={set('courseCode')} />
+                  <input
+                    type="text"
+                    list="assignment-course-code-suggestions"
+                    className="input uppercase"
+                    placeholder="EDT 411"
+                    value={form.courseCode}
+                    onChange={(e) => updateCourseCode(e.target.value)}
+                  />
+                  <datalist id="assignment-course-code-suggestions">
+                    {courseOptions.map((courseCode) => (
+                      <option key={courseCode} value={courseCode} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="label">Priority</label>

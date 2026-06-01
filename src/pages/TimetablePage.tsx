@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, MapPin, Pencil, Loader2, X, Trash2, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { useAuth } from '../context/AuthContext';
 import { Timetable, TimetableSlot, DayOfWeek } from '../types';
 
@@ -47,6 +48,12 @@ export default function TimetablePage() {
   const [showEditTimetable, setShowEditTimetable] = useState(false);
   const [venueForm, setVenueForm] = useState({ newVenue: '', reason: '' });
   const [activeTimetableId, setActiveTimetableId] = useState<string | null>(null);
+  const { suggestions, courseCodeMap } = useCourseCodeSuggestions();
+  const courseOptions = useMemo(() => suggestions.map(item => item.courseCode), [suggestions]);
+  const updateSlotCourseCode = (value: string) => {
+    const code = value.toUpperCase();
+    setSlotForm(f => ({ ...f, courseCode: code, courseTitle: courseCodeMap.get(code.trim()) || f.courseTitle }));
+  };
 
 const { data, isLoading } = useQuery<Timetable[]>({
   queryKey: ['timetables'],
@@ -438,7 +445,11 @@ useEffect(() => {
               <div>
                 <label className="label">Course Code</label>
                 <input className="input uppercase" placeholder="EDT 401" value={slotForm.courseCode}
-                  onChange={e => setSlotForm(f => ({ ...f, courseCode: e.target.value }))} />
+                  onChange={e => updateSlotCourseCode(e.target.value)}
+                  list="timetable-course-codes" />
+                <datalist id="timetable-course-codes">
+                  {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
+                </datalist>
               </div>
               <div>
                 <label className="label">Type</label>
@@ -511,7 +522,11 @@ useEffect(() => {
               <div>
                 <label className="label">Course Code</label>
                 <input className="input uppercase" placeholder="EDT 401" value={slotForm.courseCode}
-                  onChange={e => setSlotForm(f => ({ ...f, courseCode: e.target.value }))} />
+                  onChange={e => updateSlotCourseCode(e.target.value)}
+                  list="timetable-course-codes" />
+                <datalist id="timetable-course-codes">
+                  {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
+                </datalist>
               </div>
               <div>
                 <label className="label">Type</label>
