@@ -15,8 +15,8 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
-    // "baseUrl": "https://unischedule-server.onrender.com",
+    // "baseUrl": ".",
+    "baseUrl": "https://unischedule-server.onrender.com",
     "paths": { "@/*": ["src/*"] }
   },
   "include": ["src"],
