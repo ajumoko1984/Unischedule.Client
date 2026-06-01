@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus, BookOpen, Clock, CheckCircle2, Circle,
@@ -7,6 +7,7 @@ import {
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { StudyPlan, StudyTask, StudyTaskStatus, WeeklySummary } from '../types';
 
 const STATUS_CONFIG: Record<StudyTaskStatus, { label: string; color: string; bg: string; icon: React.ReactNode }> = {
@@ -29,6 +30,12 @@ export default function StudyPlannerPage() {
   const [filter, setFilter] = useState<'all' | StudyTaskStatus>('all');
   const [form, setForm] = useState({ ...emptyForm });
   const [showSummary, setShowSummary] = useState(false);
+  const { suggestions, courseCodeMap } = useCourseCodeSuggestions();
+  const courseOptions = useMemo(() => suggestions.map(item => item.courseCode), [suggestions]);
+  const updateCourseCode = (value: string) => {
+    const code = value.toUpperCase();
+    setForm(f => ({ ...f, courseCode: code, courseTitle: courseCodeMap.get(code.trim()) || f.courseTitle }));
+  };
 
   const { data: plan, isLoading } = useQuery<StudyPlan>({
     queryKey: ['study-plan'],
@@ -304,7 +311,12 @@ export default function StudyPlannerPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Course code</label>
-                  <input className="input uppercase" placeholder="EDT 411" value={form.courseCode} onChange={set('courseCode')} />
+                  <input className="input uppercase" placeholder="EDT 411" value={form.courseCode}
+                    onChange={(e) => updateCourseCode(e.target.value)}
+                    list="study-planner-course-codes" />
+                  <datalist id="study-planner-course-codes">
+                    {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="label">Course title</label>

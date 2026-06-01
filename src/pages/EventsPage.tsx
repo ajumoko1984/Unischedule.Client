@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Bell, Trash2, Loader2, X, Calendar, MapPin, Clock } from 'lucide-react';
+import { useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
@@ -30,6 +31,18 @@ export default function EventsPage() {
   const [showModal, setShowModal] = useState(false);
   const [filter, setFilter] = useState<'all' | EventCategory>('all');
   const [form, setForm] = useState({ ...emptyForm });
+  const { suggestions, courseCodeMap } = useCourseCodeSuggestions();
+
+  const updateCourseCode = (value: string) => {
+    const code = value.toUpperCase();
+    setForm(f => ({ ...f, courseCode: code }));
+    const matchedTitle = courseCodeMap.get(code.trim());
+    if (matchedTitle) {
+      setForm(f => ({ ...f, courseCode: code, courseTitle: matchedTitle }));
+    }
+  };
+
+  const courseOptions = useMemo(() => suggestions.map(item => item.courseCode), [suggestions]);
 
   const { data: events = [], isLoading } = useQuery<CalendarEvent[]>({
     queryKey: ['events'],
@@ -140,7 +153,12 @@ export default function EventsPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">Course code</label>
-                  <input className="input uppercase" placeholder="EDT 401" value={form.courseCode} onChange={set('courseCode')} />
+                  <input className="input uppercase" placeholder="EDT 401" value={form.courseCode}
+                    onChange={(e) => updateCourseCode(e.target.value)}
+                    list="event-course-codes" />
+                  <datalist id="event-course-codes">
+                    {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
+                  </datalist>
                 </div>
                 <div>
                   <label className="label">Category</label>

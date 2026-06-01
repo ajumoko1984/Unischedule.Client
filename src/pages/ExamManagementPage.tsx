@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Edit2, Trash2, Calendar, Clock, MapPin, AlertCircle, FileUp, Bell, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { CourseCodeSuggestion, useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { examService } from '../utils/examService';
 import { Exam, Semester } from '../types';
 import { format } from 'date-fns';
 import BulkImportModal from '../components/BulkImportModal';
 
 const EXAM_TYPES = [
-  { value: 'cbt', label: 'CBT Test', venue: 'CBT CENTRE' },
+  { value: 'cbt', label: 'CBT', venue: 'CBT CENTRE' },
   { value: 'written', label: 'Written Exam', venue: 'Custom' },
   { value: 'practical', label: 'Practical Exam', venue: 'Custom' },
   { value: 'oral', label: 'Oral Exam', venue: 'Custom' },
@@ -48,6 +49,14 @@ export default function ExamManagementPage() {
     endTime: '11:00',
     venue: '',
   });
+  const { suggestions, courseCodeMap } = useCourseCodeSuggestions() as { suggestions: CourseCodeSuggestion[]; courseCodeMap: Map<string, string> };
+  const courseOptions = useMemo<string[]>(() => suggestions.map(item => item.courseCode), [suggestions]);
+  const handleCourseCodeChange = (value: string) => {
+    const code = value.toUpperCase();
+    set('courseCode', code);
+    const matchedTitle = courseCodeMap.get(code.trim());
+    if (matchedTitle) set('courseTitle', matchedTitle);
+  };
 
   useEffect(() => {
     loadExams();
@@ -64,6 +73,35 @@ export default function ExamManagementPage() {
       toast.error(err.response?.data?.message || 'Failed to load exams');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Helper: find student IDs for a given course across approved course forms
+  const getStudentIdsForCourse = async (courseCode: string, exam?: Partial<Exam>) => {
+    try {
+      const faculty = exam?.faculty || '';
+      const courseOfStudy = exam?.courseOfStudy || '';
+
+      const res = await api.get('/course-forms', { params: { faculty, courseOfStudy, status: 'approved' } });
+      const forms = Array.isArray(res.data)
+        ? res.data
+        : (res.data?.forms || res.data?.data || []);
+
+      const target = (courseCode || '').trim().toUpperCase();
+      const ids = new Set<string>();
+
+      for (const f of forms) {
+        if (!Array.isArray(f.courses)) continue;
+        const has = f.courses.some((c: any) => ((typeof c === 'string' ? c : c.courseCode) || '').trim().toUpperCase() === target);
+        if (has && f.studentId && (f.studentId._id || f.studentId)) {
+          ids.add((f.studentId._id || f.studentId).toString());
+        }
+      }
+
+      return Array.from(ids);
+    } catch (err) {
+      console.error('Failed to fetch course forms for notification targeting', err);
+      return [];
     }
   };
 
@@ -92,17 +130,34 @@ const handleSaveExam = async () => {
       // If this exam is already published, notify students about the update
       if (editingExam.status === 'published') {
         try {
-          await api.post('/notifications/course', {
-            subject: `Exam updated: ${examData.courseCode}`,
-            message: `There has been an update to the ${examData.courseCode} exam. Please check your timetable for the latest date, time and venue.`,
-            courseCode: examData.courseCode,
-            type: 'exam_update',
-            examId: editingExam._id,
-            faculty: editingExam.faculty,
-            level: editingExam.level,
-            courseOfStudy: editingExam.courseOfStudy,
-          });
-          toast.success('Students notified about the update.');
+          // Target notifications to students who actually have this course in their approved form
+          const studentIds = await getStudentIdsForCourse(examData.courseCode, editingExam as any);
+          if (studentIds.length > 0) {
+            try { await examService.addStudentsToExam(editingExam._id!, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
+
+            await api.post('/notifications/course', {
+              subject: `Exam updated: ${examData.courseCode}`,
+              message: `There has been an update to the ${examData.courseCode} exam. Please check your timetable for the latest date, time and venue.`,
+              courseCode: examData.courseCode,
+              type: 'exam_update',
+              examId: editingExam._id,
+              studentIds,
+            });
+            toast.success('Students notified about the update.');
+          } else {
+            // Fallback to department-wide notification
+            await api.post('/notifications/course', {
+              subject: `Exam updated: ${examData.courseCode}`,
+              message: `There has been an update to the ${examData.courseCode} exam. Please check your timetable for the latest date, time and venue.`,
+              courseCode: examData.courseCode,
+              type: 'exam_update',
+              examId: editingExam._id,
+              faculty: editingExam.faculty,
+              level: editingExam.level,
+              courseOfStudy: editingExam.courseOfStudy,
+            });
+            toast.success('Students notified about the update.');
+          }
         } catch (err: any) {
           // don't block on notification failures
           console.error('Failed to notify students:', err);
@@ -177,17 +232,33 @@ const handleSaveExam = async () => {
       try {
         const res = await examService.getExamById(id);
         const exam = res.data?.data || res.data;
-        await api.post('/notifications/course', {
-          subject: `Exam published: ${exam.courseCode}`,
-          message: `The exam for ${exam.courseCode} has been published. Check your timetable for date, time and venue details.`,
-          courseCode: exam.courseCode,
-          type: 'exam_update',
-          examId: id,
-          faculty: exam.faculty,
-          level: exam.level,
-          courseOfStudy: exam.courseOfStudy,
-        });
-        toast.success('Students notified about the published exam.');
+        // Target notifications to students who actually have this course in their approved form
+        const studentIds = await getStudentIdsForCourse(exam.courseCode, exam);
+        if (studentIds.length > 0) {
+          try { await examService.addStudentsToExam(id, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
+          await api.post('/notifications/course', {
+            subject: `Exam published: ${exam.courseCode}`,
+            message: `The exam for ${exam.courseCode} has been published. Check your timetable for date, time and venue details.`,
+            courseCode: exam.courseCode,
+            type: 'exam_update',
+            examId: id,
+            studentIds,
+          });
+          toast.success('Students notified about the published exam.');
+        } else {
+          // fallback to department-wide notify
+          await api.post('/notifications/course', {
+            subject: `Exam published: ${exam.courseCode}`,
+            message: `The exam for ${exam.courseCode} has been published. Check your timetable for date, time and venue details.`,
+            courseCode: exam.courseCode,
+            type: 'exam_update',
+            examId: id,
+            faculty: exam.faculty,
+            level: exam.level,
+            courseOfStudy: exam.courseOfStudy,
+          });
+          toast.success('Students notified about the published exam.');
+        }
       } catch (err: any) {
         console.error('Failed to auto-notify on publish:', err);
       }
@@ -207,17 +278,32 @@ const handleSaveExam = async () => {
       // Fetch exam details to get faculty, level, courseOfStudy
       const res = await examService.getExamById(examId);
       const exam = res.data?.data || res.data;
-      await api.post('/notifications/course', {
-        subject,
-        message,
-        courseCode,
-        type: 'exam_update',
-        examId,
-        faculty: exam.faculty,
-        level: exam.level,
-        courseOfStudy: exam.courseOfStudy,
-      });
-      toast.success('Notification sent to students taking this course');
+      // Target students who have this course in their approved forms
+      const studentIds = await getStudentIdsForCourse(courseCode, exam);
+      if (studentIds.length > 0) {
+        try { await examService.addStudentsToExam(examId, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
+        await api.post('/notifications/course', {
+          subject,
+          message,
+          courseCode,
+          type: 'exam_update',
+          examId,
+          studentIds,
+        });
+        toast.success('Notification sent to students taking this course');
+      } else {
+        await api.post('/notifications/course', {
+          subject,
+          message,
+          courseCode,
+          type: 'exam_update',
+          examId,
+          faculty: exam.faculty,
+          level: exam.level,
+          courseOfStudy: exam.courseOfStudy,
+        });
+        toast.success('Notification sent to students taking this course');
+      }
       setShowNotificationModal(false);
       setNotificationForm({ examId: '', courseCode: '', subject: '', message: '' });
     } catch (err: any) {
@@ -303,8 +389,12 @@ const handleSaveExam = async () => {
                   className="input"
                   placeholder="e.g., EDT401"
                   value={newExam.courseCode || ''}
-                  onChange={(e) => set('courseCode', e.target.value.toUpperCase())}
+                  onChange={(e) => handleCourseCodeChange(e.target.value)}
+                  list="exam-course-codes"
                 />
+                <datalist id="exam-course-codes">
+                  {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
+                </datalist>
               </div>
               <div>
                 <label className="label text-sm font-medium">Course Title *</label>

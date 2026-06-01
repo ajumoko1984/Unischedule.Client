@@ -16,7 +16,21 @@ export default function LoginPage() {
       await login(email, password);
       toast.success('Welcome back!');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Login failed');
+      const status = err.response?.status;
+      const message = err.response?.data?.message;
+      
+      // Handle user not found
+      if (status === 404 || message?.toLowerCase().includes('not found') || message?.toLowerCase().includes('does not exist')) {
+        toast.error('User account not found. Please check your email or create an account.');
+      }
+      // Handle invalid credentials
+      else if (status === 401 || message?.toLowerCase().includes('invalid') || message?.toLowerCase().includes('incorrect')) {
+        toast.error('Invalid email or password. Please try again.');
+      }
+      // Generic fallback
+      else {
+        toast.error(message || 'Login failed. Please try again.');
+      }
     }
   };
 

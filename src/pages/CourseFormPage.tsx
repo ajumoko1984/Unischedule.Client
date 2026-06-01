@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Check, X, Download, Upload, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { courseFormService, CourseFormData, Course } from '../utils/courseFormService';
@@ -6,8 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { format } from 'date-fns';
 
 export default function CourseFormPage() {
-  const { user, isLevelAdviser, isClassRep } = useAuth();
+  const { user, isLevelAdviser } = useAuth();
   const [courseForms, setCourseForms] = useState<CourseFormData[]>([]);
+  const [viewMode, setViewMode] = useState<'department' | 'student'>('department');
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingForm, setEditingForm] = useState<CourseFormData | null>(null);
@@ -22,11 +23,48 @@ export default function CourseFormPage() {
   const [newCourseCode, setNewCourseCode] = useState('');
   const [newCourseTitle, setNewCourseTitle] = useState('');
 
+  const courseCodeMap = useMemo(() => {
+    const map = new Map<string, string>();
+    courseForms.forEach((form) => {
+      if (Array.isArray(form.courses)) {
+        form.courses.forEach((course) => {
+          const code = typeof course === 'string' ? course : course.courseCode;
+          const title = typeof course === 'string' ? '' : course.courseTitle;
+          if (code) {
+            map.set(code.toUpperCase(), title || map.get(code.toUpperCase()) || '');
+          }
+        });
+      }
+    });
+    courseList.forEach((course) => {
+      if (course.courseCode) {
+        map.set(course.courseCode.toUpperCase(), course.courseTitle || map.get(course.courseCode.toUpperCase()) || '');
+      }
+    });
+    return map;
+  }, [courseForms, courseList]);
+
+  const courseSuggestions = useMemo(
+    () => Array.from(courseCodeMap.entries())
+      .map(([courseCode, courseTitle]) => ({ courseCode, courseTitle }))
+      .sort((a, b) => a.courseCode.localeCompare(b.courseCode)),
+    [courseCodeMap],
+  );
+
+  const updateCourseCode = (value: string) => {
+    const code = value.toUpperCase();
+    setNewCourseCode(code);
+    const matchedTitle = courseCodeMap.get(code.trim());
+    if (matchedTitle) {
+      setNewCourseTitle(matchedTitle);
+    }
+  };
+
   useEffect(() => {
-    if (isLevelAdviser || isClassRep) {
+    if (isLevelAdviser) {
       loadCourseForms();
     }
-  }, [isLevelAdviser, isClassRep]);
+  }, [isLevelAdviser]);
 
   const addCourse = () => {
     if (!newCourseCode.trim() || !newCourseTitle.trim()) {
@@ -165,6 +203,9 @@ export default function CourseFormPage() {
     setNewCourseTitle('');
   };
 
+  const departmentForms = courseForms.filter((form) => !form.studentId);
+  const studentForms = courseForms.filter((form) => !!form.studentId);
+
   const getStatusBadge = (status: string) => {
     const badges: Record<string, { color: string; label: string }> = {
       draft: { color: 'bg-slate-100 text-slate-700', label: 'Draft' },
@@ -176,7 +217,7 @@ export default function CourseFormPage() {
     return badge;
   };
 
-  if (!isLevelAdviser && !isClassRep) {
+  if (!isLevelAdviser) {
     return (
       <div className="text-center py-12">
         <AlertCircle size={32} className="mx-auto text-slate-400 mb-3" />
@@ -206,15 +247,28 @@ export default function CourseFormPage() {
             {isLevelAdviser ? 'Create and manage course forms for your level' : 'View course forms for your level'}
           </p>
         </div>
-        {isLevelAdviser && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
-          >
-            <Plus size={18} />
-            New Course Form
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {isLevelAdviser && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition"
+            >
+              <Plus size={18} />
+              New Course Form
+            </button>
+          )}
+          <div>
+            <label className="label text-sm font-medium text-slate-700">View</label>
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as 'department' | 'student')}
+              className="input w-full sm:w-auto"
+            >
+              <option value="department">Department course forms</option>
+              <option value="student">Student-specific forms</option>
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* Form Modal */}
@@ -272,10 +326,18 @@ export default function CourseFormPage() {
                     <input
                       type="text"
                       value={newCourseCode}
-                      onChange={(e) => setNewCourseCode(e.target.value)}
+                      onChange={(e) => updateCourseCode(e.target.value)}
+                      list="course-code-suggestions"
                       className="input"
                       placeholder="e.g., EDT 401"
                     />
+                    <datalist id="course-code-suggestions">
+                      {courseSuggestions.map((course) => (
+                        <option key={course.courseCode} value={course.courseCode}>
+                          {course.courseTitle}
+                        </option>
+                      ))}
+                    </datalist>
                   </div>
                   <div>
                     <label className="label text-sm font-medium">Course Title</label>
@@ -349,7 +411,7 @@ export default function CourseFormPage() {
 
       {/* Course Forms List */}
       <div className="space-y-4">
-        {courseForms.map((form) => {
+        {(viewMode === 'department' ? departmentForms : studentForms).map((form) => {
           const badge = getStatusBadge(form.status);
           return (
             <div
@@ -362,6 +424,9 @@ export default function CourseFormPage() {
                   <p className="text-sm text-slate-600 mt-1">
                     Level {form.level} | {form.semester} Semester {form.academicYear}
                   </p>
+                  {form.student?.fullName && (
+                    <p className="text-sm text-slate-500 mt-1">Student: {form.student.fullName}</p>
+                  )}
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${badge.color}`}>
                   {badge.label}
@@ -416,11 +481,17 @@ export default function CourseFormPage() {
         })}
       </div>
 
-      {courseForms.length === 0 && (
+      {(viewMode === 'department' ? departmentForms : studentForms).length === 0 && (
         <div className="bg-slate-50 rounded-xl border border-slate-200 p-12 text-center">
           <AlertCircle size={40} className="mx-auto text-slate-400 mb-4" />
-          <h3 className="text-lg font-semibold text-slate-700 mb-1">No course forms yet</h3>
-          <p className="text-slate-600">Create one by clicking the "New Course Form" button above</p>
+          <h3 className="text-lg font-semibold text-slate-700 mb-1">
+            {viewMode === 'department' ? 'No department course forms yet' : 'No student-specific course forms yet'}
+          </h3>
+          <p className="text-slate-600">
+            {viewMode === 'department'
+              ? 'Create a department course form or switch to student-specific view.'
+              : 'Student-specific forms will appear here once students have added extra courses.'}
+          </p>
         </div>
       )}
     </div>
