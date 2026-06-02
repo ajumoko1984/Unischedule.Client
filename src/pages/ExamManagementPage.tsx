@@ -48,6 +48,7 @@ export default function ExamManagementPage() {
     startTime: '09:00',
     endTime: '11:00',
     venue: '',
+    invigilators: [''],
   });
   const { suggestions, courseCodeMap } = useCourseCodeSuggestions() as { suggestions: CourseCodeSuggestion[]; courseCodeMap: Map<string, string> };
   const courseOptions = useMemo<string[]>(() => suggestions.map(item => item.courseCode), [suggestions]);
@@ -121,6 +122,9 @@ const handleSaveExam = async () => {
     endTime: newExam.endTime,
     semester: getCurrentSemester(newExam.scheduleDate) as Semester,
     academicYear: getCurrentAcademicYear(newExam.scheduleDate),
+    invigilators: (newExam.invigilators || [])
+      .map((inv: string) => inv.trim())
+      .filter((inv: string) => inv.length > 0),
   };
 
   try {
@@ -311,8 +315,13 @@ const handleSaveExam = async () => {
     }
   };
 
+  const prepareExamForForm = (exam: Partial<Exam> = {}) => ({
+    ...exam,
+    invigilators: exam.invigilators && exam.invigilators.length > 0 ? exam.invigilators : [''],
+  });
+
   const clearForm = () => {
-    setNewExam({
+    setNewExam(prepareExamForForm({
       courseCode: '',
       courseTitle: '',
       examType: 'written',
@@ -320,7 +329,7 @@ const handleSaveExam = async () => {
       startTime: '09:00',
       endTime: '11:00',
       venue: '',
-    });
+    }));
     setEditingExam(null);
   };
 
@@ -335,6 +344,29 @@ const handleSaveExam = async () => {
     } else {
       setNewExam((s: any) => ({ ...s, [field]: value }));
     }
+  };
+
+  const updateInvigilator = (index: number, value: string) => {
+    setNewExam((prev: any) => {
+      const invigilators = [...(prev.invigilators || [''])];
+      invigilators[index] = value;
+      return { ...prev, invigilators };
+    });
+  };
+
+  const addInvigilator = () => {
+    setNewExam((prev: any) => ({ ...prev, invigilators: [...(prev.invigilators || ['']), ''] }));
+  };
+
+  const removeInvigilator = (index: number) => {
+    setNewExam((prev: any) => {
+      const invigilators = [...(prev.invigilators || [''])];
+      if (invigilators.length === 1) {
+        return { ...prev, invigilators: [''] };
+      }
+      invigilators.splice(index, 1);
+      return { ...prev, invigilators };
+    });
   };
 
   const draftExams = exams.filter(e => e.status === 'draft');
@@ -471,6 +503,38 @@ const handleSaveExam = async () => {
               </div>
             </div>
 
+            <div>
+              <label className="label text-sm font-medium">Invigilators</label>
+              <div className="space-y-3">
+                {(newExam.invigilators || ['']).map((inv, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      className="input flex-1"
+                      placeholder={`Invigilator ${index + 1}`}
+                      value={inv || ''}
+                      onChange={(e) => updateInvigilator(index, e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeInvigilator(index)}
+                      className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addInvigilator}
+                  className="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700"
+                >
+                  Add another invigilator
+                </button>
+                <p className="text-xs text-slate-500">Add one or more exam invigilators for this course.</p>
+              </div>
+            </div>
+
             {/* Buttons */}
             <div className="flex gap-3 pt-4">
               <button
@@ -513,8 +577,7 @@ const handleSaveExam = async () => {
                   <div>
                     <p className="font-semibold text-slate-800">{exam.courseCode}</p>
                     <p className="text-sm text-slate-600">{exam.courseTitle}</p>
-                    <p className="text-xs text-slate-500 mt-1">{exam.scheduleDate} • {exam.startTime} - {exam.endTime}</p>
-                  </div>
+                    <p className="text-xs text-slate-500 mt-1">{exam.scheduleDate} • {exam.startTime} - {exam.endTime}</p>                    <p className="text-xs text-slate-500 mt-1">Invigilators: {(exam.invigilators || []).filter(Boolean).join(', ') || 'None'}</p>                  </div>
                   <button
                     onClick={() => removeFromQueue(idx)}
                     className="text-red-600 hover:text-red-800 text-sm"
@@ -555,12 +618,15 @@ const handleSaveExam = async () => {
                         <MapPin size={14} /> {exam.venue}
                       </div>
                     </div>
+                    <p className="mt-3 text-sm text-slate-600">
+                      <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
                         setEditingExam(exam);
-                        setNewExam(exam);
+                        setNewExam(prepareExamForForm(exam));
                         setShowForm(true);
                       }}
                       className="px-3 py-2 text-sm bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-200"
@@ -631,12 +697,15 @@ const handleSaveExam = async () => {
                         <MapPin size={14} /> {exam.venue}
                       </div>
                     </div>
+                    <p className="mt-3 text-sm text-slate-600">
+                      <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
+                    </p>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => {
                         setEditingExam(exam);
-                        setNewExam(exam);
+                        setNewExam(prepareExamForForm(exam));
                         setShowForm(true);
                       }}
                       className="px-3 py-2 text-sm bg-primary-100 text-primary-600 rounded-lg hover:bg-primary-200"
