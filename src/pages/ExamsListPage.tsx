@@ -144,6 +144,12 @@ export default function ExamsListPage() {
                       </p>
                     </div>
                   </div>
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Invigilators</p>
+                    <p className="mt-2 text-sm font-medium text-slate-900">
+                      {exam?.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
+                    </p>
+                  </div>
                 </article>
               );
             })
@@ -184,6 +190,12 @@ export default function ExamsListPage() {
                         {exam.venue || exam.location || 'TBA'}
                       </p>
                     </div>
+                  </div>
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Invigilators</p>
+                    <p className="mt-2 text-sm font-medium text-slate-900">
+                      {exam.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
+                    </p>
                   </div>
                 </article>
               ))
