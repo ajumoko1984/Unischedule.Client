@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { examService } from '../utils/examService';
@@ -80,7 +81,34 @@ export default function ExamsListPage() {
     if (ex.courseCode) examByCourse[ex.courseCode.toUpperCase()] = ex;
   }
 
-  const isLoading = formsLoading || examsLoading;
+  const courseCodes = useMemo<string[]>(() => {
+    const rawCodes = isStudent
+      ? (activeForm?.courses as any[] | undefined)?.map((c: any) => (typeof c === 'string' ? c : c.courseCode || '').toUpperCase())
+      : exams.map((exam) => (exam.courseCode || '').toUpperCase());
+
+    return Array.from(new Set((rawCodes ?? []).filter((code) => Boolean(code)))) as string[];
+  }, [isStudent, activeForm?.courses, exams]);
+
+  const cohortFilters = useMemo(
+    () => isStudent && activeForm ? {
+      faculty: activeForm.faculty,
+      courseOfStudy: activeForm.courseOfStudy,
+      level: activeForm.level,
+    } : undefined,
+    [isStudent, activeForm]
+  );
+
+  const { data: studentCounts = {}, isLoading: countsLoading } = useQuery<Record<string, number>>({
+    queryKey: ['course-student-counts', courseCodes, cohortFilters],
+    queryFn: async () => {
+      if (courseCodes.length === 0) return {};
+      return courseFormService.countStudentsByCourseCodes(courseCodes, cohortFilters);
+    },
+    enabled: courseCodes.length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const isLoading = formsLoading || examsLoading || countsLoading;
 
   return (
     <div className="space-y-6">
@@ -144,12 +172,22 @@ export default function ExamsListPage() {
                       </p>
                     </div>
                   </div>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
+              
                   <div className="mt-4 rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Invigilators</p>
                     <p className="mt-2 text-sm font-medium text-slate-900">
                       {exam?.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
                     </p>
                   </div>
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total students doing course</p>
+                    <p className="mt-2 text-sm font-medium text-slate-900">
+                      {studentCounts[code] ?? 0}
+                    </p>
+                  </div>
+                      </div>
                 </article>
               );
             })
@@ -195,6 +233,12 @@ export default function ExamsListPage() {
                     <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Invigilators</p>
                     <p className="mt-2 text-sm font-medium text-slate-900">
                       {exam.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
+                    </p>
+                  </div>
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Total students doing course</p>
+                    <p className="mt-2 text-sm font-medium text-slate-900">
+                      {studentCounts[exam.courseCode?.toUpperCase() ?? ''] ?? 0}
                     </p>
                   </div>
                 </article>
