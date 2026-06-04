@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Edit2, Trash2, Calendar, Clock, MapPin, AlertCircle, FileUp, Bell, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { CourseCodeSuggestion, useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
+import { courseFormService } from '../utils/courseFormService';
 import { examService } from '../utils/examService';
 import { Exam, Semester } from '../types';
 import { format } from 'date-fns';
@@ -50,6 +52,8 @@ export default function ExamManagementPage() {
     venue: '',
     invigilators: [''],
   });
+  const [courseFormInfo, setCourseFormInfo] = useState<{ count: number; students: any[] } | null>(null);
+  const [courseFormInfoLoading, setCourseFormInfoLoading] = useState(false);
   const { suggestions, courseCodeMap } = useCourseCodeSuggestions() as { suggestions: CourseCodeSuggestion[]; courseCodeMap: Map<string, string> };
   const courseOptions = useMemo<string[]>(() => suggestions.map(item => item.courseCode), [suggestions]);
   const handleCourseCodeChange = (value: string) => {
@@ -59,9 +63,56 @@ export default function ExamManagementPage() {
     if (matchedTitle) set('courseTitle', matchedTitle);
   };
 
+  const examCourseCodes = useMemo<string[]>(() =>
+    Array.from(new Set(exams.map((exam) => (exam.courseCode || '').trim().toUpperCase()).filter(Boolean))),
+    [exams]
+  );
+
+  const { data: examCourseCounts = {}, isFetching: examCountsLoading } = useQuery<Record<string, number>>({
+    queryKey: ['exam-course-student-counts', examCourseCodes],
+    queryFn: async () => {
+      if (examCourseCodes.length === 0) return {};
+      return courseFormService.countStudentsByCourseCodes(examCourseCodes);
+    },
+    enabled: examCourseCodes.length > 0,
+    staleTime: 1000 * 60 * 5,
+  });
+
   useEffect(() => {
     loadExams();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadCourseFormInfo = async () => {
+      const courseCode = newExam.courseCode?.trim().toUpperCase();
+      if (!courseCode) {
+        setCourseFormInfo(null);
+        return;
+      }
+      setCourseFormInfoLoading(true);
+      try {
+        const res = await courseFormService.getStudentsByCourse(courseCode);
+        if (!active) return;
+        const students = Array.isArray(res.data)
+          ? res.data
+          : Array.isArray(res.data?.students)
+            ? res.data.students
+            : Array.isArray(res.data?.data)
+              ? res.data.data
+              : [];
+        const count = typeof res.data?.count === 'number' ? res.data.count : students.length;
+        if (active) setCourseFormInfo({ count, students });
+      } catch (error) {
+        if (active) setCourseFormInfo(null);
+      } finally {
+        if (active) setCourseFormInfoLoading(false);
+      }
+    };
+
+    loadCourseFormInfo();
+    return () => { active = false; };
+  }, [newExam.courseCode]);
 
   const loadExams = async () => {
     try {
@@ -80,28 +131,26 @@ export default function ExamManagementPage() {
   // Helper: find student IDs for a given course across approved course forms
   const getStudentIdsForCourse = async (courseCode: string, exam?: Partial<Exam>) => {
     try {
-      const faculty = exam?.faculty || '';
-      const courseOfStudy = exam?.courseOfStudy || '';
+      const filters: { faculty?: string; courseOfStudy?: string; level?: string } = {};
+      if (exam?.faculty) filters.faculty = exam.faculty;
+      if (exam?.courseOfStudy) filters.courseOfStudy = exam.courseOfStudy;
+      if (exam?.level) filters.level = exam.level;
 
-      const res = await api.get('/course-forms', { params: { faculty, courseOfStudy, status: 'approved' } });
-      const forms = Array.isArray(res.data)
+      const res = await courseFormService.getStudentsByCourse(courseCode, filters);
+      const students = Array.isArray(res.data)
         ? res.data
-        : (res.data?.forms || res.data?.data || []);
+        : Array.isArray(res.data?.students)
+          ? res.data.students
+          : Array.isArray(res.data?.data)
+            ? res.data.data
+            : [];
 
-      const target = (courseCode || '').trim().toUpperCase();
-      const ids = new Set<string>();
-
-      for (const f of forms) {
-        if (!Array.isArray(f.courses)) continue;
-        const has = f.courses.some((c: any) => ((typeof c === 'string' ? c : c.courseCode) || '').trim().toUpperCase() === target);
-        if (has && f.studentId && (f.studentId._id || f.studentId)) {
-          ids.add((f.studentId._id || f.studentId).toString());
-        }
-      }
-
-      return Array.from(ids);
+      return students
+        .map((student: any) => student._id || student.id)
+        .filter((id: any) => Boolean(id))
+        .map((id: any) => id.toString());
     } catch (err) {
-      console.error('Failed to fetch course forms for notification targeting', err);
+      console.error('Failed to fetch course students for notification targeting', err);
       return [];
     }
   };
@@ -336,6 +385,7 @@ const handleSaveExam = async () => {
   const resetForm = () => {
     setShowForm(false);
     clearForm();
+    setCourseFormInfo(null);
   };
 
   const set = (field: string, value: any) => {
@@ -427,6 +477,32 @@ const handleSaveExam = async () => {
                 <datalist id="exam-course-codes">
                   {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
                 </datalist>
+                {newExam.courseCode?.trim() && (
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-700">Course Form summary</p>
+                        <p className="text-sm text-slate-500">
+                          {courseFormInfoLoading
+                            ? 'Loading course form details…'
+                            : courseFormInfo
+                              ? `${courseFormInfo.count} registered student${courseFormInfo.count === 1 ? '' : 's'} found in approved course forms`
+                              : 'No approved course form data found for this course yet.'}
+                        </p>
+                      </div>
+                      {!courseFormInfoLoading && courseFormInfo && (
+                        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
+                          {courseFormInfo.count} {courseFormInfo.count === 1 ? 'Student' : 'Students'}
+                        </span>
+                      )}
+                    </div>
+                    {courseFormInfo?.students?.length ? (
+                      <p className="text-xs text-slate-500 mt-3">
+                        Example students: {courseFormInfo.students.slice(0, 3).map((s: any) => s.fullName || s.matricNumber || 'Unknown').join(', ')}{courseFormInfo.count > 3 ? `, +${courseFormInfo.count - 3} more` : ''}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="label text-sm font-medium">Course Title *</label>
@@ -600,11 +676,14 @@ const handleSaveExam = async () => {
               <div key={exam._id} className="border border-slate-200 rounded-lg p-4 hover:bg-slate-50">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <h3 className="font-semibold text-slate-800">{exam.courseCode}</h3>
                       <span className="text-sm text-slate-600">— {exam.courseTitle}</span>
                       <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded">
                         {exam.examType.toUpperCase()}
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-[0.16em]">
+                        {examCourseCounts[exam.courseCode?.toUpperCase() || ''] ?? (examCountsLoading ? '...' : 0)} students
                       </span>
                     </div>
                     <div className="flex gap-4 mt-2 text-sm text-slate-600">
@@ -676,7 +755,7 @@ const handleSaveExam = async () => {
               <div key={exam._id} className="border border-green-200 bg-green-50 rounded-lg p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
                       <h3 className="font-semibold text-slate-800">{exam.courseCode}</h3>
                       <span className="text-sm text-slate-600">— {exam.courseTitle}</span>
                       <span className="px-2 py-1 bg-green-200 text-green-700 text-xs font-medium rounded">
@@ -684,6 +763,9 @@ const handleSaveExam = async () => {
                       </span>
                       <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
                         Published
+                      </span>
+                      <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-[0.16em]">
+                        {examCourseCounts[exam.courseCode?.toUpperCase() || ''] ?? (examCountsLoading ? '...' : 0)} students
                       </span>
                     </div>
                     <div className="flex gap-4 mt-2 text-sm text-slate-600">
