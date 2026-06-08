@@ -14,10 +14,14 @@ import EditProfilePage from './pages/EditProfilePage';
 import StudyPlannerPage from './pages/StudyPlannerPage';
 import AssignmentTrackerPage from './pages/AssignmentTrackerPage';
 import CalendarPage from './pages/CalendarPage';
+import AcademicCalendarPage from './pages/AcademicCalendarPage';
+import AcademicCalendarManagementPage from './pages/AcademicCalendarManagementPage';
 import ExamManagementPage from './pages/ExamManagementPage';
 import ExamsListPage from './pages/ExamsListPage';
+import LecturerDashboardPage from './pages/LecturerDashboardPage';
 import CBTTestPage from './pages/CBTTestPage';
 import AdminCreateUserPage from './pages/AdminCreateUserPage';
+import SuperAdminPage from './pages/SuperAdminPage';
 import CourseFormPage from './pages/CourseFormPage';
 import StudentCourseFormPage from './pages/StudentCourseFormPage';
 import StudentCourseFormEditPage from './pages/StudentCourseFormEditPage';
@@ -40,6 +44,14 @@ const ExamOfficerRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'exam_officer' && user.role !== 'super_admin') return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// Accessible by lecturer only
+const LecturerRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'lecturer' && user.role !== 'super_admin') return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
 };
 
@@ -74,6 +86,8 @@ export default function App() {
           <Route path="dashboard"   element={<DashboardPage />} />
           <Route path="timetable"   element={<TimetablePage />} />
           <Route path="calendar"    element={<CalendarPage />} />
+          <Route path="academic-calendar" element={<AcademicCalendarPage />} />
+          <Route path="academic-calendar/manage" element={<AdminRoute><AcademicCalendarManagementPage /></AdminRoute>} />
           <Route path="events"      element={<EventsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
           <Route path="edit-profile" element={<EditProfilePage />} />
@@ -82,11 +96,13 @@ export default function App() {
           <Route path="exam-timetable" element={<ExamsListPage />} />
           <Route path="exam-management" element={<ExamOfficerRoute><ExamManagementPage /></ExamOfficerRoute>} />
           <Route path="exams" element={<ExamOfficerRoute><ExamsListPage /></ExamOfficerRoute>} />
+          <Route path="lecturer-dashboard" element={<LecturerRoute><LecturerDashboardPage /></LecturerRoute>} />
           <Route path="tests" element={<TestManagementRoute><CBTTestPage /></TestManagementRoute>} />
           <Route path="course-forms" element={<ManageRoute><CourseFormPage /></ManageRoute>} />
           <Route path="course-forms/student/:studentId" element={<ManageRoute><StudentCourseFormEditPage /></ManageRoute>} />
           <Route path="my-course-form" element={<ProtectedRoute><StudentCourseFormPage /></ProtectedRoute>} />
           <Route path="users" element={<ManageRoute><UsersPage /></ManageRoute>} />
+          <Route path="admin" element={<AdminRoute><SuperAdminPage /></AdminRoute>} />
           <Route path="admin/create-user" element={<AdminRoute><AdminCreateUserPage /></AdminRoute>} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

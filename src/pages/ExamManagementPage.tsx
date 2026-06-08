@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Edit2, Trash2, Calendar, Clock, MapPin, AlertCircle, FileUp, Bell, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Clock, MapPin, AlertCircle, FileUp, Bell, X, Mail, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
+import { smsService } from '../utils/smsService';
 import { CourseCodeSuggestion, useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
 import { courseFormService } from '../utils/courseFormService';
 import { examService } from '../utils/examService';
@@ -41,7 +42,14 @@ export default function ExamManagementPage() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [notificationForm, setNotificationForm] = useState({ examId: '', courseCode: '', subject: '', message: '' });
+  const [notificationForm, setNotificationForm] = useState({ 
+    examId: '', 
+    courseCode: '', 
+    subject: '', 
+    message: '',
+    sendEmail: true,
+    sendSMS: false,
+  });
   const [newExam, setNewExam] = useState<Partial<Exam>>({
     courseCode: '',
     courseTitle: '',
@@ -50,10 +58,10 @@ export default function ExamManagementPage() {
     startTime: '09:00',
     endTime: '11:00',
     venue: '',
+    studentPopulation: undefined,
     invigilators: [''],
   });
-  const [courseFormInfo, setCourseFormInfo] = useState<{ count: number; students: any[] } | null>(null);
-  const [courseFormInfoLoading, setCourseFormInfoLoading] = useState(false);
+  // course form summary removed — student population must be provided by exam officer
   const { suggestions, courseCodeMap } = useCourseCodeSuggestions() as { suggestions: CourseCodeSuggestion[]; courseCodeMap: Map<string, string> };
   const courseOptions = useMemo<string[]>(() => suggestions.map(item => item.courseCode), [suggestions]);
   const handleCourseCodeChange = (value: string) => {
@@ -82,37 +90,7 @@ export default function ExamManagementPage() {
     loadExams();
   }, []);
 
-  useEffect(() => {
-    let active = true;
-    const loadCourseFormInfo = async () => {
-      const courseCode = newExam.courseCode?.trim().toUpperCase();
-      if (!courseCode) {
-        setCourseFormInfo(null);
-        return;
-      }
-      setCourseFormInfoLoading(true);
-      try {
-        const res = await courseFormService.getStudentsByCourse(courseCode);
-        if (!active) return;
-        const students = Array.isArray(res.data)
-          ? res.data
-          : Array.isArray(res.data?.students)
-            ? res.data.students
-            : Array.isArray(res.data?.data)
-              ? res.data.data
-              : [];
-        const count = typeof res.data?.count === 'number' ? res.data.count : students.length;
-        if (active) setCourseFormInfo({ count, students });
-      } catch (error) {
-        if (active) setCourseFormInfo(null);
-      } finally {
-        if (active) setCourseFormInfoLoading(false);
-      }
-    };
-
-    loadCourseFormInfo();
-    return () => { active = false; };
-  }, [newExam.courseCode]);
+  // NOTE: removed automatic course-form lookup — population is entered manually
 
   const loadExams = async () => {
     try {
@@ -128,32 +106,7 @@ export default function ExamManagementPage() {
     }
   };
 
-  // Helper: find student IDs for a given course across approved course forms
-  const getStudentIdsForCourse = async (courseCode: string, exam?: Partial<Exam>) => {
-    try {
-      const filters: { faculty?: string; courseOfStudy?: string; level?: string } = {};
-      if (exam?.faculty) filters.faculty = exam.faculty;
-      if (exam?.courseOfStudy) filters.courseOfStudy = exam.courseOfStudy;
-      if (exam?.level) filters.level = exam.level;
-
-      const res = await courseFormService.getStudentsByCourse(courseCode, filters);
-      const students = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.students)
-          ? res.data.students
-          : Array.isArray(res.data?.data)
-            ? res.data.data
-            : [];
-
-      return students
-        .map((student: any) => student._id || student.id)
-        .filter((id: any) => Boolean(id))
-        .map((id: any) => id.toString());
-    } catch (err) {
-      console.error('Failed to fetch course students for notification targeting', err);
-      return [];
-    }
-  };
+  // automatic student lookup removed
 
 const handleSaveExam = async () => {
   if (!newExam.courseCode || !newExam.courseTitle || !newExam.venue || !newExam.scheduleDate || !newExam.startTime || !newExam.endTime) {
@@ -161,8 +114,17 @@ const handleSaveExam = async () => {
     return;
   }
 
-  const examData = {
-    courseCode: newExam.courseCode.toUpperCase().trim(),
+  const population = newExam.studentPopulation !== undefined && newExam.studentPopulation !== null
+    ? Number(newExam.studentPopulation)
+    : undefined;
+  if (population === undefined || Number.isNaN(population)) {
+    toast.error('Please enter the student population for this exam');
+    return;
+  }
+
+  const courseCode = newExam.courseCode.toUpperCase().trim();
+  const examData: Partial<Exam> = {
+    courseCode,
     courseTitle: newExam.courseTitle.trim(),
     examType: newExam.examType,
     venue: newExam.examType === 'cbt' ? 'CBT CENTRE' : newExam.venue,
@@ -176,46 +138,14 @@ const handleSaveExam = async () => {
       .filter((inv: string) => inv.length > 0),
   };
 
+  // population validated above; include in payload
+  examData.studentPopulation = population;
+
   try {
     if (editingExam) {
       await examService.updateExam(editingExam._id!, examData as any);
       toast.success('Exam updated!');
-      // If this exam is already published, notify students about the update
-      if (editingExam.status === 'published') {
-        try {
-          // Target notifications to students who actually have this course in their approved form
-          const studentIds = await getStudentIdsForCourse(examData.courseCode, editingExam as any);
-          if (studentIds.length > 0) {
-            try { await examService.addStudentsToExam(editingExam._id!, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
-
-            await api.post('/notifications/course', {
-              subject: `Exam updated: ${examData.courseCode}`,
-              message: `There has been an update to the ${examData.courseCode} exam. Please check your timetable for the latest date, time and venue.`,
-              courseCode: examData.courseCode,
-              type: 'exam_update',
-              examId: editingExam._id,
-              studentIds,
-            });
-            toast.success('Students notified about the update.');
-          } else {
-            // Fallback to department-wide notification
-            await api.post('/notifications/course', {
-              subject: `Exam updated: ${examData.courseCode}`,
-              message: `There has been an update to the ${examData.courseCode} exam. Please check your timetable for the latest date, time and venue.`,
-              courseCode: examData.courseCode,
-              type: 'exam_update',
-              examId: editingExam._id,
-              faculty: editingExam.faculty,
-              level: editingExam.level,
-              courseOfStudy: editingExam.courseOfStudy,
-            });
-            toast.success('Students notified about the update.');
-          }
-        } catch (err: any) {
-          // don't block on notification failures
-          console.error('Failed to notify students:', err);
-        }
-      }
+      // No automatic notification or student lookup on update — exam officer should notify manually if needed
       await loadExams();
     } else {
       setExamsQueue(prev => [...prev, examData as Partial<Exam>]);
@@ -281,40 +211,7 @@ const handleSaveExam = async () => {
     try {
       await examService.publishExam(id);
       toast.success('Exam published! Now visible to students.');
-      // Fetch exam details to include course code in the announcement
-      try {
-        const res = await examService.getExamById(id);
-        const exam = res.data?.data || res.data;
-        // Target notifications to students who actually have this course in their approved form
-        const studentIds = await getStudentIdsForCourse(exam.courseCode, exam);
-        if (studentIds.length > 0) {
-          try { await examService.addStudentsToExam(id, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
-          await api.post('/notifications/course', {
-            subject: `Exam published: ${exam.courseCode}`,
-            message: `The exam for ${exam.courseCode} has been published. Check your timetable for date, time and venue details.`,
-            courseCode: exam.courseCode,
-            type: 'exam_update',
-            examId: id,
-            studentIds,
-          });
-          toast.success('Students notified about the published exam.');
-        } else {
-          // fallback to department-wide notify
-          await api.post('/notifications/course', {
-            subject: `Exam published: ${exam.courseCode}`,
-            message: `The exam for ${exam.courseCode} has been published. Check your timetable for date, time and venue details.`,
-            courseCode: exam.courseCode,
-            type: 'exam_update',
-            examId: id,
-            faculty: exam.faculty,
-            level: exam.level,
-            courseOfStudy: exam.courseOfStudy,
-          });
-          toast.success('Students notified about the published exam.');
-        }
-      } catch (err: any) {
-        console.error('Failed to auto-notify on publish:', err);
-      }
+      // No automatic student lookup/notification on publish. Use the bell icon to notify manually.
       await loadExams();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to publish exam');
@@ -323,28 +220,24 @@ const handleSaveExam = async () => {
 
   const handleSendExamNotification = async () => {
     try {
-      const { examId, courseCode, subject, message } = notificationForm;
+      const { examId, courseCode, subject, message, sendEmail, sendSMS } = notificationForm;
+      
       if (!subject.trim() || !message.trim()) {
         toast.error('Please provide a subject and message before sending.');
         return;
       }
-      // Fetch exam details to get faculty, level, courseOfStudy
+
+      if (!sendEmail && !sendSMS) {
+        toast.error('Select at least one notification method (Email or SMS).');
+        return;
+      }
+
+      // Fetch exam details to get faculty, level, courseOfStudy, and student contact info
       const res = await examService.getExamById(examId);
       const exam = res.data?.data || res.data;
-      // Target students who have this course in their approved forms
-      const studentIds = await getStudentIdsForCourse(courseCode, exam);
-      if (studentIds.length > 0) {
-        try { await examService.addStudentsToExam(examId, studentIds); } catch (e) { console.error('addStudentsToExam failed', e); }
-        await api.post('/notifications/course', {
-          subject,
-          message,
-          courseCode,
-          type: 'exam_update',
-          examId,
-          studentIds,
-        });
-        toast.success('Notification sent to students taking this course');
-      } else {
+
+      // Send email notification
+      if (sendEmail) {
         await api.post('/notifications/course', {
           subject,
           message,
@@ -355,10 +248,35 @@ const handleSaveExam = async () => {
           level: exam.level,
           courseOfStudy: exam.courseOfStudy,
         });
-        toast.success('Notification sent to students taking this course');
       }
+
+      // Send SMS notification
+      if (sendSMS) {
+        try {
+          // Fetch student contact list for the course
+          const studentList = exam.students || [];
+          const recipientPhones: string[] = []; // TODO: Map student IDs to phone numbers from API
+          
+          if (recipientPhones.length > 0) {
+            await smsService.sendSMS(
+              recipientPhones,
+              message,
+              'exam_update',
+              { examId, courseCode, faculty: exam.faculty }
+            );
+          } else {
+            console.warn('No phone numbers available for SMS delivery');
+          }
+        } catch (smsErr: any) {
+          console.error('SMS sending failed:', smsErr);
+          toast.error('Notification sent via email, but SMS delivery failed. Check logs.');
+          return;
+        }
+      }
+
+      toast.success('Notification sent successfully!');
       setShowNotificationModal(false);
-      setNotificationForm({ examId: '', courseCode: '', subject: '', message: '' });
+      setNotificationForm({ examId: '', courseCode: '', subject: '', message: '', sendEmail: true, sendSMS: false });
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to send notification');
     }
@@ -385,7 +303,6 @@ const handleSaveExam = async () => {
   const resetForm = () => {
     setShowForm(false);
     clearForm();
-    setCourseFormInfo(null);
   };
 
   const set = (field: string, value: any) => {
@@ -477,32 +394,7 @@ const handleSaveExam = async () => {
                 <datalist id="exam-course-codes">
                   {courseOptions.map((courseCode) => <option key={courseCode} value={courseCode} />)}
                 </datalist>
-                {newExam.courseCode?.trim() && (
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-700">Course Form summary</p>
-                        <p className="text-sm text-slate-500">
-                          {courseFormInfoLoading
-                            ? 'Loading course form details…'
-                            : courseFormInfo
-                              ? `${courseFormInfo.count} registered student${courseFormInfo.count === 1 ? '' : 's'} found in approved course forms`
-                              : 'No approved course form data found for this course yet.'}
-                        </p>
-                      </div>
-                      {!courseFormInfoLoading && courseFormInfo && (
-                        <span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-white">
-                          {courseFormInfo.count} {courseFormInfo.count === 1 ? 'Student' : 'Students'}
-                        </span>
-                      )}
-                    </div>
-                    {courseFormInfo?.students?.length ? (
-                      <p className="text-xs text-slate-500 mt-3">
-                        Example students: {courseFormInfo.students.slice(0, 3).map((s: any) => s.fullName || s.matricNumber || 'Unknown').join(', ')}{courseFormInfo.count > 3 ? `, +${courseFormInfo.count - 3} more` : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
+                {/* course form summary removed — exam officer provides population manually */}
               </div>
               <div>
                 <label className="label text-sm font-medium">Course Title *</label>
@@ -546,7 +438,19 @@ const handleSaveExam = async () => {
               </div>
             </div>
 
-            {/* Date */}
+            <div>
+              <label className="label text-sm font-medium">Student Population *</label>
+              <input
+                type="number"
+                min="0"
+                className="input"
+                placeholder="Enter student population"
+                value={newExam.studentPopulation ?? ''}
+                onChange={(e) => set('studentPopulation', e.target.value === '' ? undefined : Number(e.target.value))}
+              />
+              <p className="text-xs text-slate-500 mt-1">Required: enter the expected number of students for this exam.</p>
+            </div>
+
             <div>
               <label className="label text-sm font-medium">Exam Date *</label>
               <input
@@ -557,7 +461,6 @@ const handleSaveExam = async () => {
               />
             </div>
 
-            {/* Start & End Times */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="label text-sm font-medium">Start Time *</label>
@@ -653,7 +556,12 @@ const handleSaveExam = async () => {
                   <div>
                     <p className="font-semibold text-slate-800">{exam.courseCode}</p>
                     <p className="text-sm text-slate-600">{exam.courseTitle}</p>
-                    <p className="text-xs text-slate-500 mt-1">{exam.scheduleDate} • {exam.startTime} - {exam.endTime}</p>                    <p className="text-xs text-slate-500 mt-1">Invigilators: {(exam.invigilators || []).filter(Boolean).join(', ') || 'None'}</p>                  </div>
+                    <p className="text-xs text-slate-500 mt-1">{exam.scheduleDate} • {exam.startTime} - {exam.endTime}</p>
+                    {typeof exam.studentPopulation === 'number' ? (
+                      <p className="text-xs text-slate-500 mt-1">Population: {exam.studentPopulation}</p>
+                    ) : null}
+                    <p className="text-xs text-slate-500 mt-1">Invigilators: {(exam.invigilators || []).filter(Boolean).join(', ') || 'None'}</p>
+                  </div>
                   <button
                     onClick={() => removeFromQueue(idx)}
                     className="text-red-600 hover:text-red-800 text-sm"
@@ -682,9 +590,9 @@ const handleSaveExam = async () => {
                       <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs font-medium rounded">
                         {exam.examType.toUpperCase()}
                       </span>
-                      <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-[0.16em]">
+                      {/* <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold uppercase tracking-[0.16em]">
                         {examCourseCounts[exam.courseCode?.toUpperCase() || ''] ?? (examCountsLoading ? '...' : 0)} students
-                      </span>
+                      </span> */}
                     </div>
                     <div className="flex gap-4 mt-2 text-sm text-slate-600">
                       <div className="flex items-center gap-1">
@@ -700,6 +608,11 @@ const handleSaveExam = async () => {
                     <p className="mt-3 text-sm text-slate-600">
                       <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
                     </p>
+                    {typeof exam.studentPopulation === 'number' ? (
+                      <p className="mt-2 text-sm text-slate-600">
+                        <span className="font-semibold text-slate-700">Population:</span> {exam.studentPopulation}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex gap-2">
                     <button
@@ -719,6 +632,8 @@ const handleSaveExam = async () => {
                           courseCode: exam.courseCode,
                           subject: `Update: ${exam.courseCode} Exam Details`,
                           message: `Please note that there has been an update to the ${exam.courseCode} exam. Review the new date, time, or venue and contact your level adviser if necessary.`,
+                          sendEmail: true,
+                          sendSMS: false,
                         });
                         setShowNotificationModal(true);
                       }}
@@ -782,6 +697,11 @@ const handleSaveExam = async () => {
                     <p className="mt-3 text-sm text-slate-600">
                       <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
                     </p>
+                    {typeof exam.studentPopulation === 'number' ? (
+                      <p className="mt-2 text-sm text-slate-600">
+                        <span className="font-semibold text-slate-700">Population:</span> {exam.studentPopulation}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <button
@@ -801,6 +721,8 @@ const handleSaveExam = async () => {
                           courseCode: exam.courseCode,
                           subject: `Update: ${exam.courseCode} Exam Details`,
                           message: `Please note that the ${exam.courseCode} exam has been updated. Review the new schedule and venue.`,
+                          sendEmail: true,
+                          sendSMS: false,
                         });
                         setShowNotificationModal(true);
                       }}
@@ -834,6 +756,33 @@ const handleSaveExam = async () => {
               </button>
             </div>
             <div className="space-y-4">
+              {/* Notification Method Selection */}
+              <div className="border-b border-slate-200 pb-4">
+                <label className="label text-sm font-medium mb-3">Send via:</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={notificationForm.sendEmail}
+                      onChange={(e) => setNotificationForm(f => ({ ...f, sendEmail: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <Mail size={18} className="text-blue-600" />
+                    <span className="text-sm font-medium text-slate-700">Email</span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={notificationForm.sendSMS}
+                      onChange={(e) => setNotificationForm(f => ({ ...f, sendSMS: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <MessageSquare size={18} className="text-green-600" />
+                    <span className="text-sm font-medium text-slate-700">SMS (Twilio)</span>
+                  </label>
+                </div>
+              </div>
+
               <div>
                 <label className="label text-sm font-medium">Subject</label>
                 <input
@@ -849,6 +798,9 @@ const handleSaveExam = async () => {
                   value={notificationForm.message}
                   onChange={(e) => setNotificationForm(f => ({ ...f, message: e.target.value }))}
                 />
+                {notificationForm.sendSMS && (
+                  <p className="text-xs text-slate-500 mt-2">💡 SMS has character limits. Keep messages concise.</p>
+                )}
               </div>
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
                 <button

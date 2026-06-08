@@ -31,12 +31,23 @@ export default function RegisterPage() {
     matricNumber: '',
   });
 
-  // Load faculties on mount
+  // Load faculties on mount - filter to Education faculty only
   useEffect(() => {
     const loadFaculties = async () => {
       setLoadingFaculties(true);
       const facultyList = await facultyService.getFaculties();
-      setFaculties(facultyList);
+      // Filter to only show Faculty of Education
+      const educationFacultyList = facultyList.filter(f => 
+        f.name.toLowerCase().includes('education')
+      );
+      setFaculties(educationFacultyList);
+      
+      // Auto-select Education faculty if there's only one
+      if (educationFacultyList.length === 1) {
+        const edFac = educationFacultyList[0];
+        setSelectedFacultyId(edFac.id);
+        setForm(f => ({ ...f, facultyId: edFac.id, faculty: edFac.name }));
+      }
       setLoadingFaculties(false);
     };
     loadFaculties();
@@ -151,11 +162,11 @@ export default function RegisterPage() {
           </div>
 
           <h1 className="text-2xl font-semibold text-slate-800 mb-1">Create account</h1>
-          <p className="text-sm text-slate-500 mb-6">Fill in your details to register as a student</p>
+          <p className="text-sm text-slate-500 mb-6">Faculty of Education students only</p>
 
           {/* Info Banner */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-6 text-sm text-blue-800">
-            ℹ️ You will be automatically linked to your Level Adviser based on your level and department.
+            ℹ️ Registration is restricted to Faculty of Education. You will be automatically linked to your Level Adviser based on your level and department.
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -171,9 +182,15 @@ export default function RegisterPage() {
               </div>
               <div>
                 <label className="label">Faculty</label>
-                <select className="input" value={selectedFacultyId} onChange={handleFacultyChange} required disabled={loadingFaculties}>
-                  <option value="">{loadingFaculties ? 'Loading...' : 'Select Faculty'}</option>
-                  {faculties.map(f => (
+                <select 
+                  className="input" 
+                  value={selectedFacultyId} 
+                  onChange={handleFacultyChange} 
+                  required 
+                  disabled={loadingFaculties || faculties.length <= 1}
+                >
+                  <option value="">{loadingFaculties ? 'Loading...' : faculties.length === 1 ? faculties[0].name : 'Select Faculty'}</option>
+                  {faculties.length > 1 && faculties.map(f => (
                     <option key={f.id} value={f.id}>{f.name}</option>
                   ))}
                 </select>

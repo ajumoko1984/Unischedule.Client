@@ -1,4 +1,4 @@
-export type UserRole = 'super_admin' | 'level_adviser' | 'class_rep' | 'student' | 'exam_officer';
+export type UserRole = 'super_admin' | 'level_adviser' | 'class_rep' | 'student' | 'exam_officer' | 'lecturer';
 
 export interface User {
   _id: string;
@@ -9,6 +9,7 @@ export interface User {
   level?: string;
   courseOfStudy?: string;
   matricNumber?: string;
+  phone?: string;
   isActive?: boolean;
   createdAt?: string;
 }
@@ -39,6 +40,7 @@ export interface Exam {
   courseOfStudy: string;
   semester: Semester;
   academicYear: string;
+  studentPopulation?: number;
   students: string[]; // Student IDs registered for exam
   status: ExamStatus;
   createdBy: { _id: string; fullName: string };
@@ -135,6 +137,25 @@ export interface CalendarEvent {
   reminderSent: boolean;
   createdBy: { _id: string; fullName: string; role: UserRole };
   createdAt: string;
+}
+
+// Academic Calendar - University-wide events
+export type AcademicEventType = 'semester_start' | 'semester_end' | 'exam_period_start' | 'exam_period_end' | 'public_holiday' | 'registration_period' | 'break' | 'other';
+
+export interface AcademicCalendarEvent {
+  _id: string;
+  title: string;
+  description?: string;
+  type: AcademicEventType;
+  startDate: string; // ISO date
+  endDate: string; // ISO date
+  semester?: Semester;
+  academicYear: string;
+  isPublished: boolean;
+  color?: string; // For UI display
+  createdBy: { _id: string; fullName: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type NotificationType = 'venue_change' | 'new_event' | 'reminder' | 'announcement' | 'cancellation';

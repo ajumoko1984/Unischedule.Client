@@ -29,6 +29,10 @@ const examOfficerNav = [
   { to: '/tests', icon: ClipboardList, label: 'CBT Test' },
 ];
 
+const lecturerNav = [
+  { to: '/exam-timetable', icon: CalendarDays, label: 'Exam Timetable' },
+];
+
 const courseFormNav = [
   { to: '/course-forms', icon: FileText, label: 'Manage Course Forms' },
 ];
@@ -45,6 +49,7 @@ const roleLabel: Record<string, string> = {
   class_rep:     'Class Rep',
   student:       'Student',
   exam_officer:  'Exam Officer',
+  lecturer:      'Lecturer',
 };
 
 const roleBadgeClass: Record<string, string> = {
@@ -53,6 +58,7 @@ const roleBadgeClass: Record<string, string> = {
   class_rep:     'bg-primary-100 text-primary-700',
   student:       'bg-slate-100 text-slate-600',
   exam_officer:  'bg-orange-100 text-orange-700',
+  lecturer:      'bg-blue-100 text-blue-700',
 };
 
 const NavItem = ({
@@ -89,6 +95,7 @@ export default function AppLayout() {
 
   const isStudentOrRep = user?.role === 'student' || user?.role === 'class_rep';
   const isExamOfficer = user?.role === 'exam_officer';
+  const isLecturer = user?.role === 'lecturer';
   const canManageUsers = user?.role === 'super_admin' || user?.role === 'level_adviser';
 
   const SidebarContent = () => (
@@ -138,6 +145,15 @@ export default function AppLayout() {
           </div>
         )}
 
+        {isLecturer && (
+          <div>
+            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Exam Access</p>
+            <div className="space-y-0.5">
+              {lecturerNav.map(item => <NavItem key={item.to} {...item} onClick={close} />)}
+            </div>
+          </div>
+        )}
+
         {/* Course Forms — level adviser and class rep */}
         {(user?.role === 'level_adviser' ) && (
           <div>
@@ -148,7 +164,6 @@ export default function AppLayout() {
           </div>
         )}
 
-        {/* 
         {/* Management — super admin & level adviser only */}
         {canManageUsers && (
           <div>
@@ -164,6 +179,7 @@ export default function AppLayout() {
           <div>
             <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Admin</p>
             <div className="space-y-0.5">
+              <NavItem to="/admin" icon={Users} label="Super Admin" onClick={close} />
               <NavItem to="/admin/create-user" icon={UserPlus} label="Create User" onClick={close} />
             </div>
           </div>
