@@ -8,6 +8,7 @@ import api from '../utils/api';
 const ROLES = [
   { value: 'level_adviser', label: 'Level Adviser', color: 'emerald' },
   { value: 'exam_officer', label: 'Exam Officer', color: 'orange' },
+  { value: 'lecturer', label: 'Lecturer', color: 'blue' },
   { value: 'super_admin', label: 'Super Admin', color: 'purple' },
 ];
 
@@ -34,6 +35,7 @@ export default function AdminCreateUserPage() {
     faculty: '',
     level: '',
     courseOfStudy: '',
+    phone: '',
   });
 
   useEffect(() => {
@@ -111,6 +113,11 @@ export default function AdminCreateUserPage() {
       return;
     }
 
+    if (form.role === 'lecturer' && !form.facultyId) {
+      toast.error('Please select faculty for Lecturer');
+      return;
+    }
+
     try {
       setIsLoading(true);
      const response = await api.post('/auth/admin/create-user', {
@@ -120,8 +127,9 @@ export default function AdminCreateUserPage() {
       role: form.role,
       facultyId: form.facultyId,
       faculty: form.faculty,
+      phone: form.phone || undefined,
       level: form.role === 'level_adviser' ? form.level : undefined,
-      courseOfStudy: form.role === 'level_adviser' ? form.courseOfStudy : undefined,  // ← add this
+      courseOfStudy: form.role === 'level_adviser' ? form.courseOfStudy : undefined,
     });
 
       setCreatedUser({
@@ -151,6 +159,7 @@ export default function AdminCreateUserPage() {
       faculty: '',
       level: '',
       courseOfStudy: '',
+      phone: '',
     });
     setSelectedFacultyId('');
   };
@@ -210,7 +219,7 @@ export default function AdminCreateUserPage() {
             </div>
 
             {/* Email & Faculty */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="label">Email *</label>
                 <input
@@ -220,6 +229,16 @@ export default function AdminCreateUserPage() {
                   value={form.email}
                   onChange={set('email')}
                   required
+                />
+              </div>
+              <div>
+                <label className="label">Phone</label>
+                <input
+                  type="tel"
+                  className="input"
+                  placeholder="e.g. +2348012345678"
+                  value={form.phone}
+                  onChange={set('phone')}
                 />
               </div>
               <div>

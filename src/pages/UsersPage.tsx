@@ -17,9 +17,10 @@ const roleStyle: Record<UserRole, { bg: string; text: string; label: string }> =
   class_rep:     { bg: 'bg-primary-50', text: 'text-primary-700', label: 'Class Rep' },
   student:       { bg: 'bg-slate-100', text: 'text-slate-600', label: 'Student' },
   exam_officer:  { bg: 'bg-orange-50', text: 'text-orange-700', label: 'Exam Officer' },
+  lecturer:      { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Lecturer' },
 };
 
-const ROLES: UserRole[] = ['super_admin', 'level_adviser', 'class_rep', 'student', 'exam_officer'];
+const ROLES: UserRole[] = ['super_admin', 'level_adviser', 'class_rep', 'student', 'exam_officer', 'lecturer'];
 const LEVELS = ['100', '200', '300', '400', '500'];
 const DEPTS = [
   'Educational Technology', 'Science Education', 'Arts Education',
@@ -28,7 +29,7 @@ const DEPTS = [
 
 const emptyForm = {
   fullName: '', email: '', password: '', role: 'student' as UserRole,
-  department: '', level: '', courseOfStudy: '', matricNumber: '',
+  department: '', level: '', courseOfStudy: '', matricNumber: '', phone: '',
 };
 
 export default function UsersPage() {
@@ -433,19 +434,26 @@ export default function UsersPage() {
                   <input type="email" className="input" value={form.email} onChange={set('email')} />
                 </div>
                 <div>
+                  <label className="label">Phone</label>
+                  <input type="tel" className="input" placeholder="e.g. +2348012345678" value={form.phone} onChange={set('phone')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
                   <label className="label">Role</label>
                   <select className="input" value={form.role} onChange={set('role')}>
                     <option value="student">Student</option>
                     <option value="level_adviser">Level Adviser</option>
                     <option value="exam_officer">Exam Officer</option>
+                    <option value="lecturer">Lecturer</option>
                     <option value="super_admin">Super Admin</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label className="label">Password</label>
-                <input type="password" className="input" placeholder="Temporary password"
-                  value={form.password} onChange={set('password')} minLength={6} />
+                <div>
+                  <label className="label">Password</label>
+                  <input type="password" className="input" placeholder="Temporary password"
+                    value={form.password} onChange={set('password')} minLength={6} />
+                </div>
               </div>
               <div>
                 <label className="label">department</label>
@@ -485,6 +493,11 @@ export default function UsersPage() {
                 <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 text-xs text-orange-700">
                   ✅ This Exam Officer can create, publish, and manage exams for {form.level || '?'} Level — {form.courseOfStudy || '?'}.
                   Students will see published exams based on their approved course forms.
+                </div>
+              )}
+              {form.role === 'lecturer' && (
+                <div className="bg-blue-50 border border-blue-100 rounded-xl px-4 py-3 text-xs text-blue-700">
+                  ✅ This Lecturer can be assigned as an invigilator or supervisor for exams and view the exam timetable.
                 </div>
               )}
               <div className="flex gap-2 pt-1">

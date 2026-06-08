@@ -1,6 +1,18 @@
 import api from './api';
 import { Exam } from '../types';
 
+const normalizeExamPayload = (raw: any) => ({
+  ...raw,
+  scheduleDate: raw.scheduleDate || raw.date || null,
+  venue: raw.venue || raw.location || '',
+});
+
+const normalizeResponse = (res: any) => {
+  const raw = Array.isArray(res.data) ? res.data : (res.data?.exams || res.data?.data || []);
+  const mapped = raw.map((e: any) => normalizeExamPayload(e));
+  return { ...res, data: mapped } as any;
+};
+
 export const examService = {
   // Exam Officer - Create & Manage Exams
   createExam: async (data: Partial<Exam>) => api.post('/exams', data),
@@ -8,15 +20,28 @@ export const examService = {
   // Normalize backend fields so frontend can rely on `scheduleDate` and `venue`
   getMyExams: async () => {
     const res = await api.get('/exams/my-exams');
-    const raw = Array.isArray(res.data) ? res.data : (res.data?.exams || res.data?.data || []);
-    const mapped = raw.map((e: any) => ({
-      ...e,
-      scheduleDate: e.scheduleDate || e.date || null,
-      venue: e.venue || e.location || '',
-    }));
-    return { ...res, data: mapped } as any;
+    return normalizeResponse(res);
   },
-  
+
+  getAllExams: async () => {
+    const res = await api.get('/exams');
+    return normalizeResponse(res);
+  },
+
+  getPublishedExams: async () => {
+    try {
+      const res = await api.get('/exams');
+      return normalizeResponse(res);
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        // Backend does not expose the all-exams endpoint yet; fall back to my-exams
+        const res = await api.get('/exams/my-exams');
+        return normalizeResponse(res);
+      }
+      throw err;
+    }
+  },
+
   getExamById: async (id: string) => 
     api.get(`/exams/${id}`),
   
