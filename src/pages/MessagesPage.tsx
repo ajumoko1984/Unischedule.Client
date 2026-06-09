@@ -71,7 +71,7 @@ export default function MessagesPage() {
     mutationFn: ({ id, message }: { id: string; message: string }) => api.post(`/messages/${id}/reply`, { message }),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['messages'] });
-      setForm({ message: '' });
+      setForm({ message: '', recipientRole: recipientTarget });
       toast.success(res.data.message || 'Reply sent');
     },
     onError: (e: any) => toast.error(e.response?.data?.message || 'Failed to send reply'),
@@ -238,7 +238,7 @@ export default function MessagesPage() {
                 className="input resize-none h-32"
                 placeholder={activeThread && !isCreatingNew ? 'Type your reply here...' : 'Type your message here...'}
                 value={form.message}
-                onChange={e => setForm({ message: e.target.value })}
+                onChange={e => setForm(prev => ({ ...prev, message: e.target.value }))}
               />
               <div className="flex items-center justify-between gap-2 mt-3">
                 <span className="text-xs text-slate-400">Messages stay in the same thread and appear below older messages.</span>
