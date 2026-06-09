@@ -10,7 +10,8 @@ export interface TestData {
   endTime: string;
   venue?: string;
   location?: string;
-  invigilators: string[];
+  // invigilators may be string ids/names or objects with {_id, fullName}
+  invigilators: Array<string | { _id: string; fullName: string }>;
   instructions?: string;
   faculty?: string;
   level?: string;

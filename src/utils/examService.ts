@@ -8,7 +8,9 @@ const normalizeExamPayload = (raw: any) => ({
 });
 
 const normalizeResponse = (res: any) => {
-  const raw = Array.isArray(res.data) ? res.data : (res.data?.exams || res.data?.data || []);
+  const raw = Array.isArray(res.data)
+    ? res.data
+    : (res.data?.exams || res.data?.data || []); 
   const mapped = raw.map((e: any) => normalizeExamPayload(e));
   return { ...res, data: mapped } as any;
 };
@@ -28,19 +30,10 @@ export const examService = {
     return normalizeResponse(res);
   },
 
-  getPublishedExams: async () => {
-    try {
-      const res = await api.get('/exams');
-      return normalizeResponse(res);
-    } catch (err: any) {
-      if (err.response?.status === 404) {
-        // Backend does not expose the all-exams endpoint yet; fall back to my-exams
-        const res = await api.get('/exams/my-exams');
-        return normalizeResponse(res);
-      }
-      throw err;
-    }
-  },
+getPublishedExams: async () => {
+  const res = await api.get('/exams/published');
+  return normalizeResponse(res);
+},
 
   getExamById: async (id: string) => 
     api.get(`/exams/${id}`),

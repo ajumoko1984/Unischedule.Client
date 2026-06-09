@@ -231,7 +231,6 @@ export default function CBTTestPage() {
             className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
           >
             <option value="all">All Types</option>
-            <option value="written">Written</option>
             <option value="cbt">CBT</option>
             <option value="practical">Practical</option>
             <option value="oral">Oral</option>
@@ -250,7 +249,7 @@ export default function CBTTestPage() {
             Clear
           </button>
         </div>
-        {(isExamOfficer || isClassRep) && (
+        {(isExamOfficer) && (
           <button
             onClick={() => { setEditingTest(null); setNewTest(EMPTY_FORM); setShowForm(true); }}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
@@ -290,13 +289,11 @@ export default function CBTTestPage() {
                   className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                   disabled={isClassRep}
                 >
-                  <option value="written">Written Test</option>
-                  {isExamOfficer && <option value="cbt">CBT Test</option>}
+                 <option value="cbt">CBT Test</option>
                   {isExamOfficer && <option value="practical">Practical</option>}
                   {isExamOfficer && <option value="oral">Oral</option>}
                 </select>
-                {isClassRep && <p className="mt-1 text-xs text-slate-500">Class reps can only create written tests</p>}
-              </div>
+                  </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">Course Title</label>
                 <input
@@ -324,17 +321,7 @@ export default function CBTTestPage() {
                   <input type="time" value={newTest.endTime} onChange={e => set('endTime', e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" />
                 </div>
               </div>
-              {newTest.testType === 'written' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">Venue *</label>
-                  <input
-                    type="text" value={newTest.venue}
-                    onChange={e => set('venue', e.target.value)}
-                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
-                    placeholder="e.g., Lecture Hall A"
-                  />
-                </div>
-              )}
+           
               <div className="flex gap-3 pt-4">
                 <button type="submit" className="flex-1 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700">
                   {editingTest ? 'Update Test' : 'Create Test'}

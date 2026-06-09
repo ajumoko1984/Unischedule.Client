@@ -31,7 +31,19 @@ export default function LecturerDashboardPage() {
       if (!matchesSearch) return false;
 
       if (viewMode === 'assigned') {
-        return exam.invigilators?.some(inv => inv === user?.fullName || inv === user?._id);
+        return exam.invigilators?.some((inv) => {
+          if (!inv) return false;
+          // inv may be stored as a plain string (name or id) or as an object
+          if (typeof inv === 'string') {
+            return inv === user?.fullName || inv === user?._id;
+          }
+          try {
+            // object-like entry
+            return inv._id === user?._id || inv.fullName === user?.fullName;
+          } catch (e) {
+            return false;
+          }
+        });
       }
 
       return true;
