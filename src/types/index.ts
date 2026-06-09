@@ -33,7 +33,7 @@ export interface Exam {
   endTime: string; // HH:MM
   location?: string; // Auto-set to "CBT CENTRE" for CBT exams
   venue?: string;
-  invigilators: string[]; // Lecturers invigilating
+  invigilators: Array<string | { _id: string; fullName: string }>; // Lecturers invigilating (id or object)
   instructions?: string;
   faculty: string;
   level: string;
@@ -58,7 +58,7 @@ export interface Test {
   endTime: string; // HH:MM
   venue?: string;
   location?: string;
-  invigilators: string[]; // Invigilators/proctors
+  invigilators: Array<string | { _id: string; fullName: string }>; // Invigilators/proctors (id or object)
   instructions?: string;
   faculty: string;
   level: string;
@@ -170,6 +170,17 @@ export interface Notification {
   isAutomatic: boolean;
   deliveryStatus: 'pending' | 'sent' | 'failed' | 'partial';
   createdAt: string;
+}
+
+export interface Message {
+  _id: string;
+  sender: { _id: string; fullName: string; role: UserRole };
+  recipients: Array<{ _id: string; fullName: string; role: UserRole }>;
+  subject?: string;
+  message: string;
+  replyTo?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface DashboardStats {

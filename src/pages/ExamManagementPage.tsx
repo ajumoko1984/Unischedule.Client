@@ -5,11 +5,14 @@ import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { smsService } from '../utils/smsService';
 import { CourseCodeSuggestion, useCourseCodeSuggestions } from '../hooks/useCourseCodeSuggestions';
+import { useAuth } from '../context/AuthContext';
 import { courseFormService } from '../utils/courseFormService';
 import { examService } from '../utils/examService';
+import { userService } from '../utils/userService';
 import { Exam, Semester } from '../types';
 import { format } from 'date-fns';
 import BulkImportModal from '../components/BulkImportModal';
+import InvigilatorSelect from '../components/InvigilatorSelect';
 
 const EXAM_TYPES = [
   { value: 'cbt', label: 'CBT', venue: 'CBT CENTRE' },
@@ -34,6 +37,29 @@ const getCurrentSemester = (dateString?: string): Semester => {
 };
 
 export default function ExamManagementPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'super_admin';
+  const invLabel = (inv: string | { _id: string; fullName: string } | undefined) => {
+    if (!inv) return '';
+    return typeof inv === 'string' ? inv : inv.fullName || '';
+  };
+
+  const formatInvigilators = (arr?: Array<string | { _id: string; fullName: string }>) => {
+    if (!arr || arr.length === 0) return 'None assigned';
+    return arr
+      .map(i => {
+        if (!i) return null;
+        if (typeof i === 'string') {
+          // If it's a plain string that looks like an ID, return a placeholder
+          return i.length === 24 ? `Lecturer (${i.substring(0, 8)})` : i;
+        }
+        // If it's an object, return the fullName
+        return i.fullName || `Lecturer (${i._id?.substring(0, 8)})`;
+      })
+      .filter(Boolean)
+      .join(', ');
+  };
+
   const [exams, setExams] = useState<Exam[]>([]);
   const [examsQueue, setExamsQueue] = useState<Partial<Exam>[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,7 +123,34 @@ export default function ExamManagementPage() {
       setIsLoading(true);
       const res = await examService.getMyExams();
       // Handle different response structures from API
-      const examsData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      let examsData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      
+      // Resolve invigilator IDs to lecturer objects
+      examsData = await Promise.all(
+        examsData.map(async (exam: Exam) => {
+          if (!exam.invigilators || exam.invigilators.length === 0) {
+            return exam;
+          }
+          
+          const resolvedInvigilators = await Promise.all(
+            exam.invigilators.map(async (inv) => {
+              // If already an object with fullName, return as-is
+              if (typeof inv === 'object' && inv.fullName) {
+                return inv;
+              }
+              // If it's a string (ID), fetch the lecturer
+              if (typeof inv === 'string') {
+                const lecturer = await userService.getUserById(inv);
+                return lecturer || inv; // Fallback to ID if fetch fails
+              }
+              return inv;
+            })
+          );
+          
+          return { ...exam, invigilators: resolvedInvigilators };
+        })
+      );
+      
       setExams(examsData);
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to load exams');
@@ -133,13 +186,33 @@ const handleSaveExam = async () => {
     endTime: newExam.endTime,
     semester: getCurrentSemester(newExam.scheduleDate) as Semester,
     academicYear: getCurrentAcademicYear(newExam.scheduleDate),
-    invigilators: (newExam.invigilators || [])
-      .map((inv: string) => inv.trim())
-      .filter((inv: string) => inv.length > 0),
+    // placeholder - will be replaced by normalizedInvigilators below
+    invigilators: [],
   };
 
   // population validated above; include in payload
   examData.studentPopulation = population;
+
+  // Normalize invigilators: send array of user ids (strings). Try resolve names/objects to ids.
+  const rawInvs = (newExam.invigilators || []) as Array<string | { _id: string; fullName: string }>;
+  const normalizedInvigilators = await Promise.all(rawInvs.map(async (inv) => {
+    if (!inv) return null;
+    if (typeof inv === 'string') {
+      const trimmed = inv.trim();
+      if (trimmed === '') return null;
+      // If the string looks like an id, try fetch by id
+      const byId = await userService.getUserById(trimmed);
+      if (byId) return byId._id;
+      // fallback: search by name
+      const found = await userService.searchUsers(trimmed, 'lecturer');
+      if (found && found.length > 0) return found[0]._id;
+      return trimmed; // last resort
+    }
+    // object-like entry
+    return inv._id;
+  }));
+
+  examData.invigilators = normalizedInvigilators.filter(Boolean) as any;
 
   try {
     if (editingExam) {
@@ -148,7 +221,10 @@ const handleSaveExam = async () => {
       // No automatic notification or student lookup on update — exam officer should notify manually if needed
       await loadExams();
     } else {
-      setExamsQueue(prev => [...prev, examData as Partial<Exam>]);
+      // Keep original invigilator objects (if any) for frontend notification purposes
+      const frontendInvigilators = (rawInvs || []).filter(Boolean);
+      const queued = { ...examData, _frontendInvigilators: frontendInvigilators } as any;
+      setExamsQueue(prev => [...prev, queued]);
       toast.success('Exam added to queue. Once created, use the bell icon to notify students.');
     }
     resetForm();
@@ -167,8 +243,43 @@ const handleSaveExam = async () => {
 
       for (const exam of examsQueue) {
         try {
-          await examService.createExam(exam as any);
+          // Prepare payload: map frontend invigilator objects to ids if present
+          const payload: any = { ...exam };
+          if ((exam as any)._frontendInvigilators) {
+            payload.invigilators = (exam as any)._frontendInvigilators.map((inv: any) => (typeof inv === 'string' ? inv : inv._id));
+            // remove helper property
+            delete payload._frontendInvigilators;
+          }
+
+          await examService.createExam(payload as any);
           successCount++;
+
+          // Notify invigilators by email (best-effort)
+          try {
+            const frontendInvs = (exam as any)._frontendInvigilators || (exam as any).invigilators || [];
+            const recipientEmails: string[] = [];
+            for (const inv of frontendInvs) {
+              if (!inv) continue;
+              if (typeof inv === 'object' && inv.email) recipientEmails.push(inv.email);
+              else if (typeof inv === 'string') {
+                const u = await userService.getUserById(inv);
+                if (u && u.email) recipientEmails.push(u.email);
+              }
+            }
+
+            if (recipientEmails.length > 0) {
+              const subject = `Assigned as invigilator: ${exam.courseCode}`;
+              const message = `You have been assigned as an invigilator for ${exam.courseCode} - ${exam.courseTitle} on ${exam.scheduleDate} at ${exam.startTime} in ${exam.venue || exam.location || ''}.`;
+              await api.post('/notifications/announce', {
+                subject,
+                message,
+                recipientEmails,
+                isAutomatic: true,
+              });
+            }
+          } catch (notifyErr: any) {
+            console.warn('Invigilator notification failed', notifyErr);
+          }
         } catch (err: any) {
           errors.push(`${exam.courseCode}: ${err.response?.data?.message || 'Failed to create'}`);
         }
@@ -186,6 +297,61 @@ const handleSaveExam = async () => {
       }
     } catch (err: any) {
       toast.error('Failed to create exams');
+    } finally {
+      setIsCreatingAll(false);
+    }
+  };
+
+  // One-off migration: convert invigilator id strings to {_id, fullName} objects where possible
+  const migrateInvigilators = async () => {
+    if (!confirm('Run invigilator migration for ALL exams? This will attempt to resolve string ids to user objects.')) return;
+    try {
+      setIsCreatingAll(true);
+      const res = await examService.getAllExams();
+      const all = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      let success = 0;
+      const failures: string[] = [];
+
+      for (const ex of all) {
+        try {
+          const invs = ex.invigilators || [];
+          const updated = [] as Array<string | { _id: string; fullName: string }>;
+          for (const inv of invs) {
+            if (!inv) continue;
+            if (typeof inv === 'string') {
+              const trimmed = inv.trim();
+              if (!trimmed) continue;
+              // try fetch user by id
+              const u = await userService.getUserById(trimmed);
+              if (u) updated.push(u._id);
+              else {
+                // fallback: search by name
+                const found = await userService.searchUsers(trimmed, 'lecturer');
+                if (found && found.length > 0) updated.push(found[0]._id);
+                else updated.push(trimmed);
+              }
+            } else {
+              updated.push(inv._id);
+            }
+          }
+
+          // Only call update if there is a change (i.e., values are ids and different)
+          const needsUpdate = updated.some(i => typeof i === 'string');
+          if (needsUpdate) {
+            await examService.updateExam(ex._id, { invigilators: updated } as any);
+            success++;
+          }
+        } catch (e: any) {
+          failures.push(`${ex._id}: ${e?.message || 'failed'}`);
+        }
+      }
+
+      toast.success(`${success} exam(s) migrated` + (failures.length ? `, ${failures.length} failed` : ''));
+      if (failures.length) console.error('Migration failures', failures);
+      await loadExams();
+    } catch (err: any) {
+      toast.error('Migration failed');
+      console.error(err);
     } finally {
       setIsCreatingAll(false);
     }
@@ -211,7 +377,29 @@ const handleSaveExam = async () => {
     try {
       await examService.publishExam(id);
       toast.success('Exam published! Now visible to students.');
-      // No automatic student lookup/notification on publish. Use the bell icon to notify manually.
+      // Notify invigilators about the published exam (best-effort)
+      try {
+        const res = await examService.getExamById(id);
+        const exam = res.data?.data || res.data;
+        const invs = exam.invigilators || [];
+        const recipientEmails: string[] = [];
+        for (const inv of invs) {
+          if (!inv) continue;
+          if (typeof inv === 'object' && inv.email) recipientEmails.push(inv.email);
+          else if (typeof inv === 'string') {
+            const u = await userService.getUserById(inv);
+            if (u && u.email) recipientEmails.push(u.email);
+          }
+        }
+        if (recipientEmails.length > 0) {
+          const subject = `Published: ${exam.courseCode} Exam Details`;
+          const message = `The ${exam.courseCode} exam has been published. Date: ${exam.scheduleDate}, Time: ${exam.startTime} - ${exam.endTime}, Venue: ${exam.venue || exam.location || ''}.`;
+          await api.post('/notifications/announce', { subject, message, recipientEmails, isAutomatic: true });
+        }
+      } catch (notifyErr: any) {
+        console.warn('Publish notification failed', notifyErr);
+      }
+      // Refresh
       await loadExams();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to publish exam');
@@ -313,7 +501,7 @@ const handleSaveExam = async () => {
     }
   };
 
-  const updateInvigilator = (index: number, value: string) => {
+  const updateInvigilator = (index: number, value: string | { _id: string; fullName: string; email?: string }) => {
     setNewExam((prev: any) => {
       const invigilators = [...(prev.invigilators || [''])];
       invigilators[index] = value;
@@ -359,7 +547,16 @@ const handleSaveExam = async () => {
           <p className="text-slate-600 mt-1">Create and manage exam timetables for students</p>
         </div>
         <div className="flex gap-2">
-    
+          {isAdmin && (
+            <button
+              onClick={migrateInvigilators}
+              disabled={isCreatingAll}
+              className="btn-ghost mr-2"
+              title="Migrate invigilator ids to objects"
+            >
+              Migrate invigilators
+            </button>
+          )}
           <button onClick={() => { resetForm(); setShowForm(true); }} className="btn-primary gap-2">
             <Plus size={18} /> New Exam
           </button>
@@ -486,21 +683,23 @@ const handleSaveExam = async () => {
               <label className="label text-sm font-medium">Invigilators</label>
               <div className="space-y-3">
                 {(newExam.invigilators || ['']).map((inv, index) => (
-                  <div key={index} className="flex gap-2">
-                    <input
-                      type="text"
-                      className="input flex-1"
-                      placeholder={`Invigilator ${index + 1}`}
-                      value={inv || ''}
-                      onChange={(e) => updateInvigilator(index, e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeInvigilator(index)}
-                      className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200"
-                    >
-                      Remove
-                    </button>
+                  <div key={index} className="flex gap-2 items-start">
+                    <div className="flex-1">
+                      <InvigilatorSelect
+                        value={typeof inv === 'string' ? inv : (inv as any)?._id}
+                        onChange={(val) => updateInvigilator(index, val)}
+                        placeholder={`Invigilator ${index + 1}`}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => removeInvigilator(index)}
+                        className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm hover:bg-slate-200"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ))}
                 <button
@@ -550,7 +749,7 @@ const handleSaveExam = async () => {
             </button>
           </div>
           <div className="space-y-3">
-            {examsQueue.map((exam, idx) => (
+                {examsQueue.map((exam, idx) => (
               <div key={`${exam.courseCode}-${idx}`} className="border border-slate-200 rounded-lg p-4 bg-white">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -560,7 +759,7 @@ const handleSaveExam = async () => {
                     {typeof exam.studentPopulation === 'number' ? (
                       <p className="text-xs text-slate-500 mt-1">Population: {exam.studentPopulation}</p>
                     ) : null}
-                    <p className="text-xs text-slate-500 mt-1">Invigilators: {(exam.invigilators || []).filter(Boolean).join(', ') || 'None'}</p>
+                    <p className="text-xs text-slate-500 mt-1">Invigilators: {formatInvigilators(exam.invigilators) || 'None'}</p>
                   </div>
                   <button
                     onClick={() => removeFromQueue(idx)}
@@ -606,7 +805,7 @@ const handleSaveExam = async () => {
                       </div>
                     </div>
                     <p className="mt-3 text-sm text-slate-600">
-                      <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
+                      <span className="font-semibold text-slate-700">Invigilators:</span> {formatInvigilators(exam.invigilators) || 'None assigned'}
                     </p>
                     {typeof exam.studentPopulation === 'number' ? (
                       <p className="mt-2 text-sm text-slate-600">
@@ -695,7 +894,7 @@ const handleSaveExam = async () => {
                       </div>
                     </div>
                     <p className="mt-3 text-sm text-slate-600">
-                      <span className="font-semibold text-slate-700">Invigilators:</span> {(exam.invigilators || []).filter(Boolean).join(', ') || 'None assigned'}
+                      <span className="font-semibold text-slate-700">Invigilators:</span> {formatInvigilators(exam.invigilators) || 'None assigned'}
                     </p>
                     {typeof exam.studentPopulation === 'number' ? (
                       <p className="mt-2 text-sm text-slate-600">

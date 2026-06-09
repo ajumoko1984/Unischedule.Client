@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, CalendarDays, ClipboardList, Bell,
   Users, LogOut, Menu, ChevronRight, GraduationCap,
-  BookOpen, CheckSquare, CalendarRange, Settings, UserPlus, FileText,
+  BookOpen, CheckSquare, CalendarRange, Settings, UserPlus, FileText, MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import api from '../../utils/api';
+import { Message } from '../../types';
 
 const coreNav = [
   { to: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
@@ -13,6 +16,7 @@ const coreNav = [
   { to: '/calendar',      icon: CalendarRange,   label: 'Calendar' },
   { to: '/events',        icon: ClipboardList,   label: 'Tests & Events' },
   { to: '/notifications', icon: Bell,            label: 'Notifications' },
+  { to: '/messages',      icon: MessageSquare,   label: 'Messages' },
 ];
 
 const studentNav = [
@@ -62,8 +66,8 @@ const roleBadgeClass: Record<string, string> = {
 };
 
 const NavItem = ({
-  to, icon: Icon, label, onClick,
-}: { to: string; icon: React.ElementType; label: string; onClick?: () => void }) => (
+  to, icon: Icon, label, badge, onClick,
+}: { to: string; icon: React.ElementType; label: string; badge?: number; onClick?: () => void }) => (
   <NavLink
     to={to}
     onClick={onClick}
@@ -79,7 +83,12 @@ const NavItem = ({
       <>
         <Icon size={16} className={isActive ? 'text-primary-600' : 'text-slate-400 group-hover:text-slate-500'} />
         <span>{label}</span>
-        {isActive && <ChevronRight size={14} className="ml-auto text-primary-400" />}
+        {badge !== undefined && badge > 0 && (
+          <span className="ml-auto rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-semibold text-primary-700">
+            {badge}
+          </span>
+        )}
+        {isActive && <ChevronRight size={14} className="ml-2 text-primary-400" />}
       </>
     )}
   </NavLink>
@@ -87,6 +96,13 @@ const NavItem = ({
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ['messages', 'sidebar'],
+    queryFn: () => api.get('/messages').then(r => r.data.data),
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5,
+    refetchInterval: 1000 * 60,
+  });
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -121,7 +137,12 @@ export default function AppLayout() {
           <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider px-3 mb-1.5">Main</p>
           <div className="space-y-0.5">
             {(isExamOfficer ? examOfficerCoreNav : coreNav).map(item => (
-              <NavItem key={item.to} {...item} onClick={close} />
+              <NavItem
+                key={item.to}
+                {...item}
+                badge={item.to === '/messages' ? messages.length : undefined}
+                onClick={close}
+              />
             ))}
           </div>
         </div>

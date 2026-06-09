@@ -22,11 +22,10 @@ export default function ExamsListPage() {
   const { data: studentFormData, isLoading: studentFormLoading } = useQuery({
     queryKey: ['student-course-form', user?._id],
     queryFn: async () => {
-      const res = await courseFormService.getAllCourseForms({ studentId: user!._id });
-      const forms = Array.isArray(res.data)
+      const res = isAdminOrExamOfficer ? await examService.getAllExams() : await examService.getPublishedExams();
+      return Array.isArray(res.data)
         ? res.data
-        : res.data?.forms || res.data?.data || [];
-      return forms.length > 0 ? forms[0] : null;
+        : res.data?.exams || res.data?.data || [];
     },
     enabled: isStudentOrRep,
     staleTime: 1000 * 60 * 5,
@@ -57,26 +56,27 @@ export default function ExamsListPage() {
   const formSource = studentFormData ? 'personal' : deptFormData ? 'department' : null;
   const formsLoading = isStudentOrRep && (studentFormLoading || (!studentFormData && deptFormLoading));
 
-  // 3. Fetch exams based on role: admin/exam officer can see all exams, others see only published exams
-  const { data: exams = [], isLoading: examsLoading, isError } = useQuery<Exam[]>({
-    queryKey: ['exams', user?.role, user?._id],
-    queryFn: async () => {
-      const res = isAdminOrExamOfficer
-        ? await examService.getAllExams()
-        : await examService.getPublishedExams();
-      return Array.isArray(res.data)
-        ? res.data
-        : res.data?.exams || res.data?.data || [];
-    },
-    enabled: !!user,
-    staleTime: 1000 * 60 * 5,
-  });
+ // Query 1: All published exams (for "All" tab)
+const { data: allPublishedExams = [], isLoading: publishedLoading, isError } = useQuery<Exam[]>({
+  queryKey: ['exams-published'],
+  queryFn: async () => {
+    const res =  await examService.getPublishedExams();
+    return Array.isArray(res.data) ? res.data : res.data?.exams || res.data?.data || [];
+  },
+  enabled: !!user,
+  staleTime: 1000 * 60 * 5,
+});
 
-  // Build exam lookup map by course code
-  const examByCourse: Record<string, Exam> = {};
-  for (const ex of exams) {
-    if (ex.courseCode) examByCourse[ex.courseCode.toUpperCase()] = ex;
-  }
+
+  const { data: myExams = [], isLoading: myExamsLoading } = useQuery<Exam[]>({
+  queryKey: ['exams-my', user?._id],
+  queryFn: async () => {
+    const res = await examService.getMyExams();
+    return Array.isArray(res.data) ? res.data : res.data?.exams || res.data?.data || [];
+  },
+  enabled: !!user && (isStudentOrRep || isLecturer || isLevelAdviser),
+  staleTime: 1000 * 60 * 5,
+});
 
   const myCourseCodes = useMemo<string[]>(() => {
     if (!isStudentOrRep || !activeForm?.courses) return [];
@@ -88,8 +88,14 @@ export default function ExamsListPage() {
   }, [isStudentOrRep, activeForm?.courses]);
 
   const displayExams = useMemo(() => {
-    return isAdminOrExamOfficer ? exams : exams.filter(exam => exam.status === 'published');
-  }, [exams, isAdminOrExamOfficer]);
+    return isAdminOrExamOfficer ? allPublishedExams : allPublishedExams.filter(exam => exam.status === 'published');
+  }, [allPublishedExams, isAdminOrExamOfficer]);
+
+  // Build exam lookup map by course code using the visible exams set
+  const examByCourse: Record<string, Exam> = {};
+  for (const ex of displayExams) {
+    if (ex.courseCode) examByCourse[ex.courseCode.toUpperCase()] = ex;
+  }
 
   const searchTerm = searchQuery.trim().toLowerCase();
 
@@ -103,29 +109,18 @@ export default function ExamsListPage() {
   }, [activeForm?.courses, searchTerm]);
 
   const filteredExams = useMemo(() => {
-    return displayExams.filter(exam => {
-      const code = (exam.courseCode || '').toLowerCase();
-      const title = (exam.courseTitle || '').toLowerCase();
-      const matchesSearch = !searchTerm || code.includes(searchTerm) || title.includes(searchTerm);
-      if (!matchesSearch) return false;
+  const source = viewMode === 'my' && (isStudentOrRep || isLecturer || isLevelAdviser)
+    ? myExams
+    : allPublishedExams;
 
-      if (viewMode === 'my') {
-        if (isStudentOrRep) {
-          return !!exam.courseCode && myCourseCodes.includes(exam.courseCode.toUpperCase());
-        }
-        if (isLecturer) {
-          return exam.invigilators?.some(inv => inv === user?.fullName || inv === user?._id);
-        }
-        if (isLevelAdviser) {
-          return exam.faculty === user?.faculty && exam.level === user?.level && exam.courseOfStudy === user?.courseOfStudy;
-        }
-      }
+  return source.filter(exam => {
+    const code = (exam.courseCode || '').toLowerCase();
+    const title = (exam.courseTitle || '').toLowerCase();
+    return !searchTerm || code.includes(searchTerm) || title.includes(searchTerm);
+  });
+}, [allPublishedExams, myExams, searchTerm, viewMode, isStudentOrRep, isLecturer, isLevelAdviser]);
 
-      return true;
-    });
-  }, [displayExams, searchTerm, viewMode, isStudentOrRep, isLecturer, isLevelAdviser, myCourseCodes, user]);
-
-  const isLoading = formsLoading || examsLoading;
+const isLoading = publishedLoading || (viewMode === 'my' && myExamsLoading);
 
   return (
     <div className="space-y-6">
@@ -170,133 +165,66 @@ export default function ExamsListPage() {
         </div>
       )}
 
-      {!isLoading && !isError && (
-        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Students: render from course form courses so TBA slots show */}
-          {isStudentOrRep && viewMode === 'my' ? (
-            activeForm?.courses?.length ? (
-              filteredActiveCourses.length ? (
-                filteredActiveCourses.map((c: any) => {
-                  const code = (typeof c === 'string' ? c : c.courseCode).toUpperCase();
-                  const title = typeof c === 'string' ? code : c.courseTitle;
-                  const exam = examByCourse[code];
-                  const population = exam?.studentPopulation ?? 'TBA';
-                  return (
-                    <article key={code} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-[10px] font-medium text-slate-500">{code}</p>
-                          <h2 className="mt-0.5 text-base font-semibold text-slate-900 leading-tight">{title}</h2>
-                        </div>
-                        <div className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-600 flex-shrink-0">
-                          {exam ? exam.status.replace('_', ' ') : 'No exam scheduled'}
-                        </div>
-                      </div>
-
-                      <div className="mt-2 grid gap-1.5 sm:grid-cols-3 text-[11px]">
-                        <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Date</p>
-                          <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                            {exam?.scheduleDate ? format(parseISO(exam.scheduleDate), 'PPP') : 'TBA'}
-                          </p>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Time</p>
-                          <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                            {exam ? `${exam.startTime} — ${exam.endTime}` : 'TBA'}
-                          </p>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-2">
-                          <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Venue</p>
-                          <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                            {exam ? exam.venue || exam.location || 'TBA' : 'TBA'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 flex gap-1.5 items-start text-[11px]">
-                        <div className="rounded-lg bg-slate-50 p-2 flex-1">
-                          <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Invigilators</p>
-                          <p className="mt-0.5 font-medium text-slate-900 leading-tight text-[10px]">
-                            {exam?.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
-                          </p>
-                        </div>
-                        <div className="rounded-lg bg-slate-50 p-2 flex-1">
-                          <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Students</p>
-                          <p className="mt-0.5 font-medium text-slate-900 text-center text-lg">{population}</p>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })
-              ) : (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-slate-700">
-                  No exams match your search.
-                </div>
-              )
-            ) : (
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-slate-700">
-                {formsLoading ? 'Loading your course form...' : 'No active course form found. Your exams will still show under All published exams.'}
+  {!isLoading && !isError && (
+  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+    {filteredExams.length === 0 ? (
+      <div className="col-span-full rounded-xl border border-slate-200 bg-slate-50 p-6 text-slate-700">
+        {viewMode === 'my' && myExamsLoading ? 'Loading your exams...' : 'No exams match your search.'}
+      </div>
+    ) : (
+      filteredExams.map(exam => {
+        const population = exam.studentPopulation ?? 'TBA';
+        return (
+          <article key={exam._id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500">{exam.courseCode}</p>
+                <h2 className="mt-0.5 text-base font-semibold text-slate-900 leading-tight">{exam.courseTitle}</h2>
               </div>
-            )
-          ) : filteredExams.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 text-slate-700">
-              No exams match your search.
+              <div className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-600 flex-shrink-0">
+                {exam.status.replace('_', ' ')}
+              </div>
             </div>
-          ) : (
-            filteredExams.map(exam => {
-              const population = exam.studentPopulation ?? 'TBA';
-              return (
-                <article key={exam._id} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="text-[10px] font-medium text-slate-500">{exam.courseCode}</p>
-                      <h2 className="mt-0.5 text-base font-semibold text-slate-900 leading-tight">{exam.courseTitle}</h2>
-                    </div>
-                    <div className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-600 flex-shrink-0">
-                      {exam.status.replace('_', ' ')}
-                    </div>
-                  </div>
 
-                  <div className="mt-2 grid gap-1.5 sm:grid-cols-3 text-[11px]">
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Date</p>
-                      <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                        {exam.scheduleDate ? format(parseISO(exam.scheduleDate), 'PPP') : 'TBA'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Time</p>
-                      <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                        {exam.startTime} — {exam.endTime}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-2">
-                      <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Venue</p>
-                      <p className="mt-0.5 font-medium text-slate-900 leading-tight">
-                        {exam.venue || exam.location || 'TBA'}
-                      </p>
-                    </div>
-                  </div>
+            <div className="mt-2 grid gap-1.5 sm:grid-cols-3 text-[11px]">
+              <div className="rounded-lg bg-slate-50 p-2">
+                <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Date</p>
+                <p className="mt-0.5 font-medium text-slate-900 leading-tight">
+                  {exam.scheduleDate ? format(parseISO(exam.scheduleDate), 'PPP') : 'TBA'}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-2">
+                <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Time</p>
+                <p className="mt-0.5 font-medium text-slate-900 leading-tight">
+                  {exam.startTime && exam.endTime ? `${exam.startTime} — ${exam.endTime}` : 'TBA'}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-2">
+                <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Venue</p>
+                <p className="mt-0.5 font-medium text-slate-900 leading-tight">
+                  {exam.venue || 'TBA'}
+                </p>
+              </div>
+            </div>
 
-                  <div className="mt-2 flex gap-1.5 items-start text-[11px]">
-                    <div className="rounded-lg bg-slate-50 p-2 flex-1">
-                      <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Invigilators</p>
-                      <p className="mt-0.5 font-medium text-slate-900 leading-tight text-[10px]">
-                        {exam.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-slate-50 p-2 flex-1">
-                      <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Students</p>
-                      <p className="mt-0.5 font-medium text-slate-900 text-center text-lg">{population}</p>
-                    </div>
-                  </div>
-                </article>
-              );
-            })
-          )}
-        </div>
-      )}
+            <div className="mt-2 flex gap-1.5 items-start text-[11px]">
+              <div className="rounded-lg bg-slate-50 p-2 flex-1">
+                <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Invigilators</p>
+                <p className="mt-0.5 font-medium text-slate-900 leading-tight text-[10px]">
+                  {exam.invigilators?.filter(Boolean).length ? exam.invigilators.filter(Boolean).join(', ') : 'TBA'}
+                </p>
+              </div>
+              <div className="rounded-lg bg-slate-50 p-2 flex-1">
+                <p className="text-[8px] uppercase tracking-[0.08em] text-slate-500 font-semibold">Students</p>
+                <p className="mt-0.5 font-medium text-slate-900 text-center text-lg">{population}</p>
+              </div>
+            </div>
+          </article>
+        );
+      })
+    )}
+  </div>
+)}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import SuperAdminPage from './pages/SuperAdminPage';
 import CourseFormPage from './pages/CourseFormPage';
 import StudentCourseFormPage from './pages/StudentCourseFormPage';
 import StudentCourseFormEditPage from './pages/StudentCourseFormEditPage';
+import MessagesPage from './pages/MessagesPage';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuth();
@@ -90,6 +91,7 @@ export default function App() {
           <Route path="academic-calendar/manage" element={<AdminRoute><AcademicCalendarManagementPage /></AdminRoute>} />
           <Route path="events"      element={<EventsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="messages" element={<MessagesPage />} />
           <Route path="edit-profile" element={<EditProfilePage />} />
           <Route path="study-planner"  element={<StudyPlannerPage />} />
           <Route path="assignments"    element={<AssignmentTrackerPage />} />
