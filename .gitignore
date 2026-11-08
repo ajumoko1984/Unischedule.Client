@@ -1,8 +1,13 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
+init
+api.js
+
 temp_auto_push.bat
 temp_interactive_push.bat
 branch_structure.json
